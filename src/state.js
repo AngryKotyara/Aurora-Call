@@ -15,6 +15,7 @@ function readStoredSession() {
 export const state = {
   session: readStoredSession(),
   friends: [],
+  callHistory: [],
   selectedFriend: null,
   peerConnection: null,
   mediaStream: null,
@@ -31,6 +32,8 @@ export function saveSession(session) {
 export function clearSession() {
   state.session = null;
   state.friends = [];
+  state.callHistory = [];
   state.selectedFriend = null;
+  state.lastSignalId = 0;
   localStorage.removeItem(config.sessionStorageKey);
 }

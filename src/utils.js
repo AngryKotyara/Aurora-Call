@@ -36,6 +36,36 @@ export function generateAccessKey() {
     .join("-");
 }
 
+function padDatePart(value) {
+  return String(value).padStart(2, "0");
+}
+
+export function formatCallDate(value, now = new Date()) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Дата неизвестна";
+
+  const startOfDate = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  const dayDifference = Math.round(
+    (startOfToday.getTime() - startOfDate.getTime()) / 86_400_000,
+  );
+  const time = `${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+
+  if (dayDifference === 0) return `Сегодня, ${time}`;
+  if (dayDifference === 1) return `Вчера, ${time}`;
+
+  return `${padDatePart(date.getDate())}.${padDatePart(date.getMonth() + 1)}.${date.getFullYear()}, ${time}`;
+}
+
 export function downloadAccessKey(username, accessKey) {
   const link = document.createElement("a");
   const file = new Blob([`Aurora Call\nИмя: ${username}\nКлюч: ${accessKey}`]);

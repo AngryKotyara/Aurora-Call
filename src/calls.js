@@ -23,20 +23,38 @@ function toggleTracks(kind) {
   });
 }
 
+function recordCallStatus(callId, friend, mode, status) {
+  if (!callId || !friend) return Promise.resolve();
+
+  return rpc("record_call_event", {
+    p_token: state.session.token,
+    p_call_id: callId,
+    p_peer: friend.id,
+    p_mode: mode,
+    p_status: status,
+  }).catch(() => {});
+}
+
 export async function endCall({ notifyPeer = true } = {}) {
   const friend = state.selectedFriend;
   const callId = state.callId;
+  const mode = state.callMode;
   stopLocalCall();
 
-  if (notifyPeer && friend && callId) {
-    await rpc("send_call_signal", {
-      p_token: state.session.token,
-      p_call_id: callId,
-      p_to: friend.id,
-      p_kind: "hangup",
-      p_payload: {},
-    }).catch(() => {});
-  }
+  const requests = [recordCallStatus(callId, friend, mode, "completed")];
+
+  if (notifyPeer && friend && callId)
+    requests.push(
+      rpc("send_call_signal", {
+        p_token: state.session.token,
+        p_call_id: callId,
+        p_to: friend.id,
+        p_kind: "hangup",
+        p_payload: {},
+      }).catch(() => {}),
+    );
+
+  await Promise.all(requests);
 }
 
 export async function startCall(mode, incoming = false, offer = null) {
@@ -58,6 +76,7 @@ export async function startCall(mode, incoming = false, offer = null) {
       video: mode === "video",
     });
   } catch {
+    state.callId = null;
     showToast("Разрешите доступ к микрофону и камере");
     return;
   }
@@ -118,13 +137,12 @@ export async function startCall(mode, incoming = false, offer = null) {
       });
     }
 
-    void rpc("record_call_event", {
-      p_token: state.session.token,
-      p_call_id: state.callId,
-      p_peer: state.selectedFriend.id,
-      p_mode: mode,
-      p_status: incoming ? "answered" : "started",
-    }).catch(() => {});
+    void recordCallStatus(
+      state.callId,
+      state.selectedFriend,
+      mode,
+      incoming ? "answered" : "started",
+    );
   } catch (error) {
     stopLocalCall();
     showToast(error.message);
@@ -158,6 +176,12 @@ async function handleSignal(signal) {
   } else if (signal.kind === "ice" && state.peerConnection) {
     await state.peerConnection.addIceCandidate(signal.payload).catch(() => {});
   } else if (signal.kind === "hangup" || signal.kind === "decline") {
+    await recordCallStatus(
+      state.callId || signal.call_id,
+      state.selectedFriend,
+      state.callMode,
+      signal.kind === "decline" ? "declined" : "completed",
+    );
     showToast(
       signal.kind === "decline" ? "Звонок отклонён" : "Звонок завершён",
     );
