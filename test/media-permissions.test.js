@@ -78,7 +78,7 @@ test("browser denial overrides a previously stored grant", async () => {
   );
 });
 
-test("permission prompt is detected without opening media devices", async () => {
+test("permission prompt is detected without a stored grant", async () => {
   let mediaRequests = 0;
   const browser = {
     mediaDevices: {
@@ -96,4 +96,66 @@ test("permission prompt is detected without opening media devices", async () => 
     { status: "prompt" },
   );
   assert.equal(mediaRequests, 0);
+});
+
+test("stored access survives a browser restart that reports prompt", async () => {
+  const storage = memoryStorage();
+  const browserBeforeRestart = {
+    mediaDevices: {
+      getUserMedia: async () => ({ getTracks: () => [] }),
+    },
+  };
+
+  await requestMediaPermissions(session, browserBeforeRestart, storage);
+
+  let mediaRequests = 0;
+  const browserAfterRestart = {
+    mediaDevices: {
+      getUserMedia: async () => {
+        mediaRequests += 1;
+      },
+    },
+    permissions: {
+      query: async () => ({ state: "prompt" }),
+    },
+  };
+
+  assert.deepEqual(
+    await inspectMediaPermissions(session, browserAfterRestart, storage),
+    { status: "granted" },
+  );
+  assert.equal(mediaRequests, 0);
+});
+
+test("temporary device errors do not erase a stored grant", async () => {
+  const storage = memoryStorage();
+  const browser = {
+    mediaDevices: {
+      getUserMedia: async () => ({ getTracks: () => [] }),
+    },
+  };
+
+  await requestMediaPermissions(session, browser, storage);
+
+  const temporarilyUnavailableBrowser = {
+    mediaDevices: {
+      getUserMedia: async () => {
+        throw Object.assign(new Error("camera is busy"), {
+          name: "NotReadableError",
+        });
+      },
+    },
+  };
+
+  assert.deepEqual(
+    await requestMediaPermissions(
+      session,
+      temporarilyUnavailableBrowser,
+      storage,
+    ),
+    { status: "error" },
+  );
+  assert.deepEqual(await inspectMediaPermissions(session, browser, storage), {
+    status: "granted",
+  });
 });

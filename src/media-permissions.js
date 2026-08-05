@@ -56,6 +56,7 @@ export async function inspectMediaPermissions(
   const states = await Promise.all(
     permissionNames.map((name) => readBrowserPermission(name, browser)),
   );
+  const storedGrant = hasStoredGrant(session, storage);
 
   if (states.includes("denied")) {
     clearMediaPermissionRecord(session, storage);
@@ -67,13 +68,12 @@ export async function inspectMediaPermissions(
     return { status: "granted" };
   }
 
-  if (states.includes("prompt")) {
-    clearMediaPermissionRecord(session, storage);
-    return { status: "prompt" };
-  }
-
   return {
-    status: hasStoredGrant(session, storage) ? "granted" : "prompt",
+    // Some mobile browsers report `prompt` immediately after a browser or
+    // device restart even when access was granted earlier. Treat that answer
+    // as inconclusive: only an explicit `denied` result or a rejected media
+    // request is allowed to revoke the account's persisted grant.
+    status: storedGrant ? "granted" : "prompt",
   };
 }
 
@@ -96,9 +96,8 @@ export async function requestMediaPermissions(
     storeGrant(session, storage);
     return { status: "granted" };
   } catch (error) {
-    clearMediaPermissionRecord(session, storage);
-
     if (error?.name === "NotAllowedError" || error?.name === "SecurityError") {
+      clearMediaPermissionRecord(session, storage);
       return { status: "blocked" };
     }
 
