@@ -94,20 +94,46 @@ async function acceptInviteFromUrl() {
   }
 }
 
+async function deleteFriend(friend) {
+  if (!window.confirm(`Удалить ${friend.name} из друзей?`)) return;
+
+  try {
+    await rpc("remove_call_friend", {
+      p_token: state.session.token,
+      p_friend: friend.id,
+    });
+
+    if (state.selectedFriend?.id === friend.id) {
+      state.selectedFriend = null;
+    }
+
+    await render("friends");
+    showToast(`${friend.name} удалён из друзей`, true);
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function render(activeScreen = "home") {
   if (!state.session) {
     renderAuth({ onRegister: register, onLogin: login });
     return;
   }
 
-  state.friends = await rpc("list_call_friends", {
-    p_token: state.session.token,
-  }).catch(() => []);
+  [state.friends, state.callHistory] = await Promise.all([
+    rpc("list_call_friends", {
+      p_token: state.session.token,
+    }).catch(() => []),
+    rpc("list_call_history", {
+      p_token: state.session.token,
+    }).catch(() => []),
+  ]);
 
   renderMain({
     activeScreen,
     session: state.session,
     friends: state.friends,
+    callHistory: state.callHistory,
     onNavigate: render,
     onSelectFriend: selectFriend,
     onCall: (mode, friend) => {
@@ -115,6 +141,7 @@ async function render(activeScreen = "home") {
       void startCall(mode);
     },
     onGenerateInvite: generateInvite,
+    onDeleteFriend: deleteFriend,
     onLogout: logout,
   });
 }

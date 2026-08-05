@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   escapeHtml,
+  formatCallDate,
   generateAccessKey,
   hashSecret,
   isValidUsername,
@@ -30,4 +31,18 @@ test("hashSecret returns a stable SHA-256 digest", async () => {
 
 test("generateAccessKey creates eight non-empty segments", () => {
   assert.equal(generateAccessKey().split("-").filter(Boolean).length, 8);
+});
+
+test("formatCallDate uses readable labels for recent calls", () => {
+  const now = new Date(2026, 7, 6, 12, 0);
+
+  assert.equal(
+    formatCallDate(new Date(2026, 7, 6, 9, 5), now),
+    "Сегодня, 09:05",
+  );
+  assert.equal(
+    formatCallDate(new Date(2026, 7, 5, 23, 7), now),
+    "Вчера, 23:07",
+  );
+  assert.equal(formatCallDate("not-a-date", now), "Дата неизвестна");
 });

@@ -12,6 +12,7 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "linkedom": "0.18.13",
     "prettier": "^3.6.2",
     "vite": "^7.1.1"
   }

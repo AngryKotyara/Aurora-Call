@@ -1,10 +1,11 @@
-import { escapeHtml, query } from "./utils.js";
+import { escapeHtml, formatCallDate, query } from "./utils.js";
 
 const root = document.getElementById("root");
 
 function navigation(activeScreen) {
   const items = [
     ["home", "⌂", "Звонки"],
+    ["history", "◷", "История"],
     ["friends", "♙", "Друзья"],
     ["settings", "⚙", "Настройки"],
   ];
@@ -35,10 +36,55 @@ function friendCallCard(friend) {
 }
 
 function friendListItem(friend) {
+  const id = escapeHtml(friend.id);
   const username = escapeHtml(friend.username);
   const initial = escapeHtml(friend.username[0]?.toUpperCase() || "?");
 
-  return `<div class="card row"><span class="av" aria-hidden="true">${initial}</span><b>${username}</b></div>`;
+  return `<div class="card row friend-row">
+    <span class="av" aria-hidden="true">${initial}</span>
+    <b class="grow">${username}</b>
+    <button class="delete-friend" data-delete-friend="${id}" data-name="${username}" aria-label="Удалить ${username} из друзей">Удалить</button>
+  </div>`;
+}
+
+function historyListItem(call) {
+  const peerName = escapeHtml(call.peer_name || "Неизвестный пользователь");
+  const initial = escapeHtml(call.peer_name?.[0]?.toUpperCase() || "?");
+  const isVideo = call.mode === "video";
+  const isIncoming = call.direction === "incoming";
+  const direction = isIncoming ? "Входящий" : "Исходящий";
+  const mode = isVideo ? "видео" : "аудио";
+  const statuses = {
+    answered: "Принят",
+    completed: "Завершён",
+    declined: "Отклонён",
+    started: "Ожидание ответа",
+  };
+  const status = statuses[call.status] || "Завершён";
+  const date = formatCallDate(call.created_at);
+  const machineDate = escapeHtml(call.created_at || "");
+
+  return `<article class="card row history-row">
+    <span class="history-avatar ${isVideo ? "video" : ""}" aria-hidden="true">${initial}</span>
+    <div class="grow">
+      <div class="history-title"><b>${peerName}</b><span aria-hidden="true">${isVideo ? "▣" : "☎"}</span></div>
+      <div class="muted history-meta"><span class="direction ${isIncoming ? "incoming" : "outgoing"}">${isIncoming ? "↙" : "↗"}</span>${direction} · ${mode} · ${status}</div>
+      <time class="history-time" datetime="${machineDate}">${date}</time>
+    </div>
+  </article>`;
+}
+
+function auroraWaves() {
+  const wavePath =
+    "M0 72 C36 20 72 20 108 72 S180 124 216 72 S288 20 324 72 S396 124 432 72 S504 20 540 72 S612 124 648 72 S720 20 756 72 S828 124 864 72";
+
+  return `<div class="aurora-waves" aria-hidden="true">
+    <svg viewBox="0 0 864 144" preserveAspectRatio="none">
+      <g class="wave-track wave-track-one"><path d="${wavePath}" /></g>
+      <g class="wave-track wave-track-two"><path d="${wavePath}" /></g>
+      <g class="wave-track wave-track-three"><path d="${wavePath}" /></g>
+    </svg>
+  </div>`;
 }
 
 export function renderAuth({ onRegister, onLogin }) {
@@ -70,10 +116,12 @@ export function renderMain({
   activeScreen,
   session,
   friends,
+  callHistory,
   onNavigate,
   onSelectFriend,
   onCall,
   onGenerateInvite,
+  onDeleteFriend,
   onLogout,
 }) {
   const callFriends = friends.length
@@ -82,19 +130,37 @@ export function renderMain({
   const allFriends =
     friends.map(friendListItem).join("") ||
     '<div class="card muted">Друзей пока нет.</div>';
+  const historyItems =
+    callHistory.map(historyListItem).join("") ||
+    '<div class="card empty-state"><span aria-hidden="true">◷</span><b>История пока пуста</b><p class="muted">Здесь появятся входящие и исходящие звонки.</p></div>';
 
   root.innerHTML = `
     <main class="app">
       <section class="screen ${activeScreen === "home" ? "on" : ""}">
-        <div class="brand">Aurora</div>
-        <h1>Звонки</h1>
-        <p class="muted">Выберите друга и начните разговор.</p>
+        <header class="home-hero">
+          <div class="home-copy">
+            <div class="brand">Aurora</div>
+            <h1>Звонки</h1>
+            <p>Выберите друга и начните разговор.</p>
+          </div>
+          ${auroraWaves()}
+        </header>
         <div class="grid">
           <button id="audio" class="call">☎<br />Аудиозвонок</button>
           <button id="video" class="call video">▣<br />Видеозвонок</button>
         </div>
         <h2>Друзья</h2>
         ${callFriends}
+      </section>
+      <section class="screen ${activeScreen === "history" ? "on" : ""}">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Последние события</span>
+            <h1>История звонков</h1>
+          </div>
+          <span class="history-count" aria-label="Звонков в истории: ${callHistory.length}">${callHistory.length}</span>
+        </div>
+        ${historyItems}
       </section>
       <section class="screen ${activeScreen === "friends" ? "on" : ""}">
         <h1>Друзья</h1>
@@ -134,6 +200,14 @@ export function renderMain({
         name: button.dataset.name,
       });
     }),
+  );
+  document.querySelectorAll("[data-delete-friend]").forEach((button) =>
+    button.addEventListener("click", () =>
+      onDeleteFriend({
+        id: button.dataset.deleteFriend,
+        name: button.dataset.name,
+      }),
+    ),
   );
   query("#audio")?.addEventListener("click", () => onCall("audio"));
   query("#video")?.addEventListener("click", () => onCall("video"));
