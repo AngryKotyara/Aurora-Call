@@ -1,6 +1,16 @@
 import { escapeHtml, formatCallDate, query } from "./utils.js";
+import { logoUrl } from "./branding.js";
 
 const root = document.getElementById("root");
+
+function brandLockup(className = "") {
+  return `<div class="brand ${className}">
+    <span class="brand-logo-frame" aria-hidden="true">
+      <img class="brand-logo" src="${logoUrl}" alt="" />
+    </span>
+    <span>Aurora Call</span>
+  </div>`;
+}
 
 function navigation(activeScreen) {
   const items = [
@@ -87,10 +97,63 @@ function auroraWaves() {
   </div>`;
 }
 
+function mediaAccessCard(permission = { status: "prompt" }, compact = false) {
+  const content =
+    {
+      granted: {
+        icon: "✓",
+        title: "Камера и микрофон готовы",
+        text: "Доступ сохранён для следующих входов на этом устройстве.",
+        action: "Доступ разрешён",
+      },
+      prompt: {
+        icon: "◉",
+        title: "Разрешите доступ для звонков",
+        text: "Браузер запросит камеру и микрофон один раз и запомнит ваш выбор.",
+        action: "Разрешить камеру и микрофон",
+      },
+      blocked: {
+        icon: "!",
+        title: "Доступ заблокирован",
+        text: "Разрешите камеру и микрофон в настройках сайта, затем повторите проверку.",
+        action: "Повторить запрос",
+      },
+      "missing-device": {
+        icon: "!",
+        title: "Устройства не найдены",
+        text: "Подключите камеру и микрофон, затем повторите проверку.",
+        action: "Проверить снова",
+      },
+      unsupported: {
+        icon: "!",
+        title: "Доступ недоступен",
+        text: "Откройте Aurora Call в современном браузере по защищённому адресу HTTPS.",
+        action: "Недоступно",
+      },
+      error: {
+        icon: "!",
+        title: "Не удалось проверить доступ",
+        text: "Проверьте подключение устройств и попробуйте ещё раз.",
+        action: "Попробовать снова",
+      },
+    }[permission.status] || null;
+  const isGranted = permission.status === "granted";
+  const isUnsupported = permission.status === "unsupported";
+
+  return `<div class="card media-access ${isGranted ? "granted" : ""} ${compact ? "compact" : ""}" data-media-status="${escapeHtml(permission.status)}">
+    <span class="media-access-icon" aria-hidden="true">${content.icon}</span>
+    <div class="media-access-copy">
+      <h2>${content.title}</h2>
+      <p class="muted">${content.text}</p>
+    </div>
+    <button class="btn ${isGranted ? "permission-granted" : ""}" data-request-media ${isGranted || isUnsupported ? "disabled" : ""}>${content.action}</button>
+  </div>`;
+}
+
 export function renderAuth({ onRegister, onLogin }) {
   root.innerHTML = `
     <main class="app">
-      <div class="brand">Aurora Call</div>
+      ${brandLockup("auth-brand")}
       <h1>Регистрация</h1>
       <p class="muted">Имя уникально и не меняется.</p>
       <label class="sr-only" for="name">Имя пользователя</label>
@@ -117,11 +180,13 @@ export function renderMain({
   session,
   friends,
   callHistory,
+  mediaPermission,
   onNavigate,
   onSelectFriend,
   onCall,
   onGenerateInvite,
   onDeleteFriend,
+  onRequestMediaAccess,
   onLogout,
 }) {
   const callFriends = friends.length
@@ -139,12 +204,13 @@ export function renderMain({
       <section class="screen ${activeScreen === "home" ? "on" : ""}">
         <header class="home-hero">
           <div class="home-copy">
-            <div class="brand">Aurora</div>
+            ${brandLockup("hero-brand")}
             <h1>Звонки</h1>
             <p>Выберите друга и начните разговор.</p>
           </div>
           ${auroraWaves()}
         </header>
+        ${mediaPermission?.status === "granted" ? "" : mediaAccessCard(mediaPermission, true)}
         <div class="grid">
           <button id="audio" class="call">☎<br />Аудиозвонок</button>
           <button id="video" class="call video">▣<br />Видеозвонок</button>
@@ -169,6 +235,7 @@ export function renderMain({
       <section class="screen ${activeScreen === "settings" ? "on" : ""}">
         <h1>Настройки</h1>
         <div class="card"><span class="muted">Имя пользователя</span><h2>${escapeHtml(session.username)}</h2></div>
+        ${mediaAccessCard(mediaPermission)}
         <div class="card">
           <h2>QR-приглашение</h2>
           <p class="muted">Одноразовое приглашение.</p>
@@ -208,6 +275,15 @@ export function renderMain({
         name: button.dataset.name,
       }),
     ),
+  );
+  document.querySelectorAll("[data-request-media]").forEach((button) =>
+    button.addEventListener("click", () => {
+      document.querySelectorAll("[data-request-media]").forEach((item) => {
+        item.disabled = true;
+        item.textContent = "Ожидаем разрешение…";
+      });
+      void onRequestMediaAccess();
+    }),
   );
   query("#audio")?.addEventListener("click", () => onCall("audio"));
   query("#video")?.addEventListener("click", () => onCall("video"));

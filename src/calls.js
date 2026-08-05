@@ -1,5 +1,6 @@
 import { rpc } from "./api.js";
 import { config } from "./config.js";
+import { clearMediaPermissionRecord } from "./media-permissions.js";
 import { state } from "./state.js";
 import { removeCallModal, renderCallModal } from "./ui.js";
 import { query, showToast } from "./utils.js";
@@ -75,9 +76,16 @@ export async function startCall(mode, incoming = false, offer = null) {
       audio: true,
       video: mode === "video",
     });
-  } catch {
+  } catch (error) {
     state.callId = null;
-    showToast("Разрешите доступ к микрофону и камере");
+    if (error?.name === "NotAllowedError" || error?.name === "SecurityError") {
+      clearMediaPermissionRecord(state.session);
+      showToast("Разрешите доступ к микрофону и камере в настройках");
+    } else if (error?.name === "NotFoundError") {
+      showToast("Камера или микрофон не найдены");
+    } else {
+      showToast("Не удалось подключить камеру и микрофон");
+    }
     return;
   }
 

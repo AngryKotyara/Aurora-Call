@@ -1,5 +1,10 @@
 import { rpc } from "./api.js";
+import { applyBranding } from "./branding.js";
 import { startCall, startSignalPolling } from "./calls.js";
+import {
+  inspectMediaPermissions,
+  requestMediaPermissions,
+} from "./media-permissions.js";
 import { clearSession, saveSession, state } from "./state.js";
 import { renderAuth, renderInvite, renderMain } from "./ui.js";
 import {
@@ -10,6 +15,8 @@ import {
   query,
   showToast,
 } from "./utils.js";
+
+applyBranding();
 
 async function register(username) {
   try {
@@ -114,26 +121,44 @@ async function deleteFriend(friend) {
   }
 }
 
+async function grantMediaAccess(activeScreen) {
+  const permission = await requestMediaPermissions(state.session);
+  const messages = {
+    granted: "Доступ к камере и микрофону разрешён",
+    blocked: "Доступ заблокирован в настройках браузера",
+    "missing-device": "Камера или микрофон не найдены",
+    unsupported: "Браузер не поддерживает доступ к устройствам",
+    error: "Не удалось проверить камеру и микрофон",
+  };
+
+  showToast(messages[permission.status], permission.status === "granted");
+  await render(activeScreen);
+}
+
 async function render(activeScreen = "home") {
   if (!state.session) {
     renderAuth({ onRegister: register, onLogin: login });
     return;
   }
 
-  [state.friends, state.callHistory] = await Promise.all([
+  const [friends, callHistory, mediaPermission] = await Promise.all([
     rpc("list_call_friends", {
       p_token: state.session.token,
     }).catch(() => []),
     rpc("list_call_history", {
       p_token: state.session.token,
     }).catch(() => []),
+    inspectMediaPermissions(state.session),
   ]);
+  state.friends = friends;
+  state.callHistory = callHistory;
 
   renderMain({
     activeScreen,
     session: state.session,
     friends: state.friends,
     callHistory: state.callHistory,
+    mediaPermission,
     onNavigate: render,
     onSelectFriend: selectFriend,
     onCall: (mode, friend) => {
@@ -142,6 +167,7 @@ async function render(activeScreen = "home") {
     },
     onGenerateInvite: generateInvite,
     onDeleteFriend: deleteFriend,
+    onRequestMediaAccess: () => grantMediaAccess(activeScreen),
     onLogout: logout,
   });
 }

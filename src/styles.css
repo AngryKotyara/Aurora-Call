@@ -151,18 +151,53 @@ button {
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
   font-size: 23px;
   font-weight: 900;
+  letter-spacing: -0.5px;
 }
 
-.brand::before {
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  margin-right: 9px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #36a4ff, #c43fff);
-  content: "";
+.brand-logo-frame {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid #c79aff2e;
+  border-radius: 14px;
+  background: #05030a;
+  box-shadow:
+    0 0 0 1px #0008,
+    0 8px 24px #7f31ff42;
+  place-items: center;
+}
+
+.brand-logo {
+  display: block;
+  width: 60px;
+  height: 60px;
+  max-width: none;
+}
+
+.auth-brand {
+  margin-bottom: 26px;
+}
+
+.auth-brand .brand-logo-frame {
+  width: 58px;
+  height: 58px;
+  border-radius: 17px;
+}
+
+.auth-brand .brand-logo {
+  width: 73px;
+  height: 73px;
+}
+
+.hero-brand {
+  color: #fff;
 }
 
 h1 {
@@ -209,6 +244,70 @@ h2 {
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--text);
+}
+
+.media-access {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 100% 0, #7f4cff22, transparent 42%), var(--card);
+}
+
+.media-access.compact {
+  margin-top: 0;
+  border-color: #7058aa66;
+}
+
+.media-access.granted {
+  border-color: #4cd99d55;
+  background:
+    radial-gradient(circle at 100% 0, #2fd18c20, transparent 42%), var(--card);
+}
+
+.media-access-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  grid-row: span 1;
+  border: 1px solid #a481ff55;
+  border-radius: 15px;
+  background: #6f43d729;
+  color: #cdbdff;
+  font-size: 21px;
+  font-weight: 900;
+  place-items: center;
+}
+
+.media-access.granted .media-access-icon {
+  border-color: #4cd99d66;
+  background: #2bbd7c24;
+  color: #70e6b4;
+}
+
+.media-access-copy h2 {
+  margin: 1px 0 5px;
+  font-size: 17px;
+}
+
+.media-access-copy p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.media-access .btn {
+  grid-column: 1 / -1;
+  margin-top: 11px;
+}
+
+.media-access .permission-granted {
+  border: 1px solid #4cd99d44;
+  background: #246f5244;
+  color: #8eebc3;
+  cursor: default;
+  opacity: 1;
 }
 
 .grid {
