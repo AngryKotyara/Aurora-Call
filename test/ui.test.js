@@ -10,8 +10,13 @@ const { document, window } = parseHTML(
 globalThis.document = document;
 globalThis.window = window;
 
-const { renderCallModal, renderMain, removeCallModal } =
-  await import("../src/ui.js");
+const {
+  renderCallModal,
+  renderMain,
+  removeCallModal,
+  setRemoteScreenShareActive,
+  setScreenShareActive,
+} = await import("../src/ui.js");
 
 test("main screen renders the logo, waves, history, and friend removal controls", () => {
   const navigation = [];
@@ -94,9 +99,10 @@ test("granted media access is kept as a disabled status in settings", () => {
   assert.match(document.querySelector(".media-access").textContent, /сохранён/);
 });
 
-test("video calls use a full-screen stage with draggable local preview", () => {
+test("video calls use a full-screen stage with screen sharing controls", async () => {
   let microphoneEnabled = true;
   let cameraEnabled = true;
+  let screenShareActive = false;
   let hangups = 0;
 
   renderCallModal({
@@ -104,6 +110,8 @@ test("video calls use a full-screen stage with draggable local preview", () => {
     mode: "video",
     onToggleMic: () => (microphoneEnabled = !microphoneEnabled),
     onToggleCamera: () => (cameraEnabled = !cameraEnabled),
+    onToggleScreenShare: async () => (screenShareActive = !screenShareActive),
+    canShareScreen: true,
     onHangup: () => {
       hangups += 1;
     },
@@ -113,6 +121,7 @@ test("video calls use a full-screen stage with draggable local preview", () => {
   const localPreview = document.querySelector("#local-preview");
   const microphoneButton = document.querySelector("#toggle-mic");
   const cameraButton = document.querySelector("#toggle-camera");
+  const screenShareButton = document.querySelector("#toggle-screen-share");
 
   assert.ok(callScreen.classList.contains("call-screen"));
   assert.ok(callScreen.classList.contains("video-call"));
@@ -120,6 +129,8 @@ test("video calls use a full-screen stage with draggable local preview", () => {
   assert.match(localPreview.getAttribute("aria-label"), /Перетащите/);
   assert.equal(localPreview.getAttribute("tabindex"), "0");
   assert.equal(document.body.classList.contains("call-active"), true);
+  assert.equal(screenShareButton.dataset.active, "false");
+  assert.equal(screenShareButton.getAttribute("aria-pressed"), "false");
 
   let boundaryWidth = 390;
   let boundaryHeight = 844;
@@ -186,6 +197,25 @@ test("video calls use a full-screen stage with draggable local preview", () => {
   assert.ok(cameraButton.classList.contains("is-off"));
   assert.ok(localPreview.classList.contains("is-camera-off"));
 
+  screenShareButton.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(screenShareButton.dataset.active, "true");
+  assert.ok(screenShareButton.classList.contains("is-active"));
+  assert.match(screenShareButton.getAttribute("aria-label"), /Остановить/);
+  assert.equal(callScreen.dataset.localScreenSharing, "true");
+  assert.match(
+    document.querySelector("#screen-share-status").textContent,
+    /Вы показываете экран/,
+  );
+
+  setScreenShareActive(false);
+  setRemoteScreenShareActive(true);
+  assert.equal(callScreen.dataset.remoteScreenSharing, "true");
+  assert.match(
+    document.querySelector("#screen-share-status").textContent,
+    /Собеседник показывает экран/,
+  );
+
   document.querySelector("#hangup").click();
   assert.equal(hangups, 1);
 
@@ -208,6 +238,24 @@ test("audio calls keep the full-screen layout without a camera control", () => {
   );
   assert.equal(document.querySelector("#local-preview"), null);
   assert.equal(document.querySelector("#toggle-camera"), null);
+  assert.equal(document.querySelector("#toggle-screen-share"), null);
+
+  removeCallModal();
+});
+
+test("unsupported browsers keep a disabled screen sharing button", () => {
+  renderCallModal({
+    friendName: "volna_preview",
+    mode: "video",
+    onToggleMic: () => true,
+    onToggleCamera: () => true,
+    canShareScreen: false,
+    onHangup: () => {},
+  });
+
+  const screenShareButton = document.querySelector("#toggle-screen-share");
+  assert.equal(screenShareButton.disabled, true);
+  assert.match(screenShareButton.getAttribute("aria-label"), /недоступна/);
 
   removeCallModal();
 });

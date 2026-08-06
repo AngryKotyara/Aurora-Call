@@ -608,6 +608,11 @@ body.call-active {
   object-fit: cover;
 }
 
+.call-screen[data-remote-screen-sharing="true"] .remote-video {
+  background: #050507;
+  object-fit: contain;
+}
+
 .audio-call .remote-video {
   display: none;
 }
@@ -680,6 +685,43 @@ body.call-active {
   margin: 7px 0 0;
   color: #e2e2ea;
   font-size: 13px;
+}
+
+.screen-share-status {
+  position: absolute;
+  z-index: 4;
+  top: calc(max(22px, env(safe-area-inset-top)) + 72px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 40px);
+  padding: 8px 13px;
+  transform: translateX(-50%);
+  border: 1px solid #b6a5ff4d;
+  border-radius: 999px;
+  background: #17131fbd;
+  color: #f4f1ff;
+  box-shadow: 0 8px 26px #0006;
+  font-size: 12px;
+  font-weight: 750;
+  text-align: center;
+  white-space: nowrap;
+  backdrop-filter: blur(18px);
+  pointer-events: none;
+}
+
+.screen-share-status[hidden] {
+  display: none;
+}
+
+.screen-share-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #78e8bb;
+  box-shadow: 0 0 12px #78e8bb;
 }
 
 .connection-dot {
@@ -831,6 +873,15 @@ body.call-active {
   transform: translateY(-2px);
 }
 
+.controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.controls button:disabled:hover {
+  transform: none;
+}
+
 .controls button:active {
   transform: scale(0.94);
 }
@@ -885,6 +936,36 @@ body.call-active {
 .media-control.is-off .control-state {
   border-color: #f4f1f2;
   background: #e23f55;
+}
+
+.screen-share-control .control-state {
+  background: #7a7a86;
+}
+
+.screen-share-control.is-active {
+  border-color: #b8a6ff99;
+  background: #7054dc;
+  color: #fff;
+  box-shadow:
+    0 0 0 3px #8f76f53d,
+    0 8px 28px #0007;
+}
+
+.screen-share-control.is-active .control-state {
+  border-color: #7054dc;
+  background: #78e8bb;
+  box-shadow: 0 0 9px #78e8bb;
+}
+
+.screen-share-control.is-pending .control-icon {
+  animation: screen-share-pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes screen-share-pulse {
+  to {
+    opacity: 0.45;
+    transform: scale(0.9);
+  }
 }
 
 .controls .danger {

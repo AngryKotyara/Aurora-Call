@@ -2,15 +2,89 @@ import { rpc } from "./api.js";
 import { config } from "./config.js";
 import { clearMediaPermissionRecord } from "./media-permissions.js";
 import { state } from "./state.js";
-import { removeCallModal, renderCallModal } from "./ui.js";
+import {
+  removeCallModal,
+  renderCallModal,
+  setRemoteScreenShareActive,
+  setScreenShareActive,
+} from "./ui.js";
 import { query, showToast } from "./utils.js";
 
+let removeScreenEndedListener = () => {};
+
+function detachScreenStream() {
+  const stream = state.screenStream;
+  state.screenStream = null;
+  removeScreenEndedListener();
+  removeScreenEndedListener = () => {};
+  return stream;
+}
+
+function sendScreenShareState(active) {
+  if (!state.session || !state.selectedFriend || !state.callId)
+    return Promise.resolve();
+
+  return rpc("send_call_signal", {
+    p_token: state.session.token,
+    p_call_id: state.callId,
+    p_to: state.selectedFriend.id,
+    p_kind: "screen-share",
+    p_payload: { active },
+  }).catch(() => {});
+}
+
+async function stopScreenShare({
+  restoreCamera = true,
+  notifyPeer = true,
+} = {}) {
+  const screenStream = detachScreenStream();
+
+  if (!screenStream) {
+    setScreenShareActive(false);
+    return false;
+  }
+
+  const cameraTrack = state.mediaStream?.getVideoTracks()[0] || null;
+
+  if (restoreCamera && state.videoSender && cameraTrack) {
+    try {
+      await state.videoSender.replaceTrack(cameraTrack);
+    } catch {
+      showToast("Не удалось вернуть изображение с камеры");
+    }
+  }
+
+  screenStream.getTracks().forEach((track) => track.stop());
+  setScreenShareActive(false);
+  if (notifyPeer) void sendScreenShareState(false);
+  return false;
+}
+
+function watchScreenTrack(track) {
+  const handleEnded = () => void stopScreenShare();
+
+  if (track.addEventListener) {
+    track.addEventListener("ended", handleEnded, { once: true });
+    removeScreenEndedListener = () =>
+      track.removeEventListener("ended", handleEnded);
+    return;
+  }
+
+  track.onended = handleEnded;
+  removeScreenEndedListener = () => {
+    if (track.onended === handleEnded) track.onended = null;
+  };
+}
+
 function stopLocalCall() {
+  void stopScreenShare({ restoreCamera: false, notifyPeer: false });
   state.mediaStream?.getTracks().forEach((track) => track.stop());
   state.peerConnection?.close();
   state.peerConnection = null;
   state.mediaStream = null;
+  state.videoSender = null;
   state.callId = null;
+  setRemoteScreenShareActive(false);
   removeCallModal();
 }
 
@@ -49,6 +123,80 @@ function recordCallStatus(callId, friend, mode, status) {
     p_mode: mode,
     p_status: status,
   }).catch(() => {});
+}
+
+export async function toggleScreenShare() {
+  if (state.screenStream) return stopScreenShare();
+
+  const callId = state.callId;
+  const videoSender = state.videoSender;
+  const getDisplayMedia = navigator.mediaDevices?.getDisplayMedia?.bind(
+    navigator.mediaDevices,
+  );
+
+  if (
+    state.callMode !== "video" ||
+    !state.peerConnection ||
+    !videoSender?.replaceTrack
+  ) {
+    showToast("Демонстрация доступна только во время видеозвонка");
+    return false;
+  }
+
+  if (!getDisplayMedia) {
+    showToast("Этот браузер не поддерживает демонстрацию экрана");
+    return false;
+  }
+
+  let screenStream;
+
+  try {
+    screenStream = await getDisplayMedia({ video: true, audio: false });
+  } catch (error) {
+    showToast(
+      error?.name === "NotAllowedError" || error?.name === "AbortError"
+        ? "Демонстрация экрана не начата"
+        : "Не удалось включить демонстрацию экрана",
+    );
+    return false;
+  }
+
+  const screenTrack = screenStream.getVideoTracks()[0];
+
+  if (
+    !screenTrack ||
+    !state.peerConnection ||
+    state.callId !== callId ||
+    state.videoSender !== videoSender
+  ) {
+    screenStream.getTracks().forEach((track) => track.stop());
+    showToast("Не удалось получить изображение экрана");
+    return false;
+  }
+
+  try {
+    screenTrack.contentHint = "detail";
+    await videoSender.replaceTrack(screenTrack);
+  } catch {
+    screenStream.getTracks().forEach((track) => track.stop());
+    showToast("Не удалось передать изображение экрана");
+    return false;
+  }
+
+  if (
+    !state.peerConnection ||
+    state.callId !== callId ||
+    state.videoSender !== videoSender
+  ) {
+    screenStream.getTracks().forEach((track) => track.stop());
+    return false;
+  }
+
+  state.screenStream = screenStream;
+  watchScreenTrack(screenTrack);
+  setScreenShareActive(true);
+  void sendScreenShareState(true);
+  return true;
 }
 
 export async function endCall({ notifyPeer = true } = {}) {
@@ -108,20 +256,27 @@ export async function startCall(mode, incoming = false, offer = null) {
     state.peerConnection = new RTCPeerConnection({
       iceServers: config.iceServers,
     });
-    state.mediaStream
-      .getTracks()
-      .forEach((track) =>
-        state.peerConnection.addTrack(track, state.mediaStream),
-      );
+    state.videoSender = null;
+    state.mediaStream.getTracks().forEach((track) => {
+      const sender = state.peerConnection.addTrack(track, state.mediaStream);
+      if (track.kind === "video") state.videoSender = sender;
+    });
 
     renderCallModal({
       friendName: state.selectedFriend.name,
       mode,
       onToggleMic: () => toggleTracks("audio"),
       onToggleCamera: () => toggleTracks("video"),
+      onToggleScreenShare: toggleScreenShare,
+      canShareScreen: Boolean(
+        navigator.mediaDevices?.getDisplayMedia &&
+        state.videoSender?.replaceTrack,
+      ),
       onHangup: () => void endCall(),
     });
     query("#local-video").srcObject = state.mediaStream;
+    if (incoming)
+      setRemoteScreenShareActive(Boolean(offer?.payload?.screenSharing));
 
     state.peerConnection.ontrack = (event) => {
       query("#remote-video").srcObject = event.streams[0];
@@ -169,7 +324,11 @@ export async function startCall(mode, incoming = false, offer = null) {
         p_call_id: state.callId,
         p_to: state.selectedFriend.id,
         p_kind: "offer",
-        p_payload: { ...outgoingOffer, mode },
+        p_payload: {
+          ...outgoingOffer,
+          mode,
+          screenSharing: Boolean(state.screenStream),
+        },
       });
     }
 
@@ -211,6 +370,8 @@ async function handleSignal(signal) {
     await state.peerConnection.setRemoteDescription(signal.payload);
   } else if (signal.kind === "ice" && state.peerConnection) {
     await state.peerConnection.addIceCandidate(signal.payload).catch(() => {});
+  } else if (signal.kind === "screen-share" && state.peerConnection) {
+    setRemoteScreenShareActive(Boolean(signal.payload?.active));
   } else if (signal.kind === "hangup" || signal.kind === "decline") {
     await recordCallStatus(
       state.callId || signal.call_id,

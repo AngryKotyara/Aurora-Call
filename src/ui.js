@@ -311,6 +311,12 @@ function callControlIcon(kind) {
       <path class="control-slash" d="m4 4 16 16" />
     </svg>`;
 
+  if (kind === "screen")
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="13" rx="2.5" />
+      <path d="M8.5 21h7M12 17v4M9 10l3-3 3 3M12 7v7" />
+    </svg>`;
+
   return `<svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="3" y="6.5" width="13" height="11" rx="3" />
     <path d="m16 10 4-2.25v8.5L16 14" />
@@ -335,6 +341,48 @@ function setMediaControlState(button, enabled, device) {
   button.setAttribute("aria-pressed", String(!enabled));
   button.setAttribute("aria-label", label);
   button.setAttribute("title", label);
+}
+
+function refreshScreenShareStatus() {
+  const callScreen = query("#call-modal");
+  const status = query("#screen-share-status");
+  const statusText = query("#screen-share-status-text");
+  if (!callScreen || !status || !statusText) return;
+
+  const isLocal = callScreen.dataset.localScreenSharing === "true";
+  const isRemote = callScreen.dataset.remoteScreenSharing === "true";
+
+  status.hidden = !isLocal && !isRemote;
+  statusText.textContent = isLocal
+    ? isRemote
+      ? "Вы и собеседник показываете экран"
+      : "Вы показываете экран"
+    : "Собеседник показывает экран";
+}
+
+export function setScreenShareActive(active) {
+  const callScreen = query("#call-modal");
+  const button = query("#toggle-screen-share");
+  if (callScreen) callScreen.dataset.localScreenSharing = String(active);
+
+  if (button) {
+    const label = active
+      ? "Остановить демонстрацию экрана"
+      : "Начать демонстрацию экрана";
+    button.dataset.active = String(active);
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
+  }
+
+  refreshScreenShareStatus();
+}
+
+export function setRemoteScreenShareActive(active) {
+  const callScreen = query("#call-modal");
+  if (callScreen) callScreen.dataset.remoteScreenSharing = String(active);
+  refreshScreenShareStatus();
 }
 
 function makePreviewDraggable(preview, boundary) {
@@ -451,6 +499,8 @@ export function renderCallModal({
   mode,
   onToggleMic,
   onToggleCamera,
+  onToggleScreenShare = async () => false,
+  canShareScreen = true,
   onHangup,
 }) {
   removeCallModal();
@@ -459,7 +509,7 @@ export function renderCallModal({
 
   document.body.insertAdjacentHTML(
     "beforeend",
-    `<div class="modal call-screen ${isVideo ? "video-call" : "audio-call"}" id="call-modal" role="dialog" aria-modal="true" aria-labelledby="call-peer-name" data-connection="connecting">
+    `<div class="modal call-screen ${isVideo ? "video-call" : "audio-call"}" id="call-modal" role="dialog" aria-modal="true" aria-labelledby="call-peer-name" data-connection="connecting" data-local-screen-sharing="false" data-remote-screen-sharing="false">
       <div class="call-stage">
         <video id="remote-video" class="remote-video" autoplay playsinline></video>
         <div class="call-audio-backdrop" aria-hidden="true">
@@ -471,6 +521,10 @@ export function renderCallModal({
         <h2 id="call-peer-name">${escapeHtml(friendName)}</h2>
         <p><span class="connection-dot" aria-hidden="true"></span><span id="call-status">Соединение…</span> · ${isVideo ? "видео" : "аудио"}</p>
       </header>
+      <div id="screen-share-status" class="screen-share-status" role="status" hidden>
+        <span class="screen-share-dot" aria-hidden="true"></span>
+        <span id="screen-share-status-text">Вы показываете экран</span>
+      </div>
       ${
         isVideo
           ? `<div id="local-preview" class="local-preview" role="group" tabindex="0" aria-label="Ваше видео. Перетащите его в удобное место или используйте клавиши со стрелками.">
@@ -496,6 +550,14 @@ export function renderCallModal({
         </button>`
             : ""
         }
+        ${
+          isVideo
+            ? `<button id="toggle-screen-share" class="screen-share-control" type="button" data-active="false" aria-pressed="false" aria-label="${canShareScreen ? "Начать демонстрацию экрана" : "Демонстрация экрана недоступна в этом браузере"}" title="${canShareScreen ? "Начать демонстрацию экрана" : "Демонстрация экрана недоступна в этом браузере"}" ${canShareScreen ? "" : "disabled"}>
+          <span class="control-icon">${callControlIcon("screen")}</span>
+          <span class="control-state" aria-hidden="true"></span>
+        </button>`
+            : ""
+        }
         <button id="hangup" class="danger hangup-control" type="button" aria-label="Завершить звонок" title="Завершить звонок">
           <span class="control-icon">${endCallIcon()}</span>
         </button>
@@ -507,6 +569,7 @@ export function renderCallModal({
 
   const microphoneButton = query("#toggle-mic");
   const cameraButton = query("#toggle-camera");
+  const screenShareButton = query("#toggle-screen-share");
   const localPreview = query("#local-preview");
 
   microphoneButton.addEventListener("click", () => {
@@ -518,6 +581,22 @@ export function renderCallModal({
     setMediaControlState(cameraButton, enabled, "camera");
     localPreview?.classList.toggle("is-camera-off", !enabled);
   });
+  if (canShareScreen)
+    screenShareButton?.addEventListener("click", async () => {
+      if (screenShareButton.dataset.pending === "true") return;
+
+      screenShareButton.dataset.pending = "true";
+      screenShareButton.classList.add("is-pending");
+      screenShareButton.disabled = true;
+
+      try {
+        setScreenShareActive(Boolean(await onToggleScreenShare()));
+      } finally {
+        screenShareButton.dataset.pending = "false";
+        screenShareButton.classList.remove("is-pending");
+        screenShareButton.disabled = false;
+      }
+    });
   query("#hangup").addEventListener("click", onHangup);
 
   if (localPreview)

@@ -19,6 +19,8 @@ export const state = {
   selectedFriend: null,
   peerConnection: null,
   mediaStream: null,
+  videoSender: null,
+  screenStream: null,
   callId: null,
   callMode: "audio",
   lastSignalId: 0,
