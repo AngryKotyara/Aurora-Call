@@ -19,9 +19,24 @@ function toggleTracks(kind) {
     kind === "audio"
       ? state.mediaStream?.getAudioTracks()
       : state.mediaStream?.getVideoTracks();
+
+  if (!tracks?.length) return false;
+
+  const enabled = !tracks.some((track) => track.enabled);
   tracks?.forEach((track) => {
-    track.enabled = !track.enabled;
+    track.enabled = enabled;
   });
+
+  return enabled;
+}
+
+function updateCallStatus(message, connectionState) {
+  const status = query("#call-status");
+  const callScreen = query("#call-modal");
+
+  if (status) status.textContent = message;
+  if (callScreen && connectionState)
+    callScreen.dataset.connection = connectionState;
 }
 
 function recordCallStatus(callId, friend, mode, status) {
@@ -110,6 +125,19 @@ export async function startCall(mode, incoming = false, offer = null) {
 
     state.peerConnection.ontrack = (event) => {
       query("#remote-video").srcObject = event.streams[0];
+      updateCallStatus("На связи", "connected");
+    };
+    state.peerConnection.onconnectionstatechange = () => {
+      const connectionState = state.peerConnection?.connectionState;
+      const statuses = {
+        connected: "На связи",
+        connecting: "Соединение…",
+        disconnected: "Связь прервана",
+        failed: "Не удалось подключиться",
+      };
+
+      if (statuses[connectionState])
+        updateCallStatus(statuses[connectionState], connectionState);
     };
     state.peerConnection.onicecandidate = (event) => {
       if (!event.candidate) return;

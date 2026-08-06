@@ -10,7 +10,8 @@ const { document, window } = parseHTML(
 globalThis.document = document;
 globalThis.window = window;
 
-const { renderMain } = await import("../src/ui.js");
+const { renderCallModal, renderMain, removeCallModal } =
+  await import("../src/ui.js");
 
 test("main screen renders the logo, waves, history, and friend removal controls", () => {
   const navigation = [];
@@ -91,4 +92,122 @@ test("granted media access is kept as a disabled status in settings", () => {
   assert.equal(document.querySelectorAll("[data-request-media]").length, 1);
   assert.equal(document.querySelector("[data-request-media]").disabled, true);
   assert.match(document.querySelector(".media-access").textContent, /сохранён/);
+});
+
+test("video calls use a full-screen stage with draggable local preview", () => {
+  let microphoneEnabled = true;
+  let cameraEnabled = true;
+  let hangups = 0;
+
+  renderCallModal({
+    friendName: "volna_preview",
+    mode: "video",
+    onToggleMic: () => (microphoneEnabled = !microphoneEnabled),
+    onToggleCamera: () => (cameraEnabled = !cameraEnabled),
+    onHangup: () => {
+      hangups += 1;
+    },
+  });
+
+  const callScreen = document.querySelector("#call-modal");
+  const localPreview = document.querySelector("#local-preview");
+  const microphoneButton = document.querySelector("#toggle-mic");
+  const cameraButton = document.querySelector("#toggle-camera");
+
+  assert.ok(callScreen.classList.contains("call-screen"));
+  assert.ok(callScreen.classList.contains("video-call"));
+  assert.equal(callScreen.getAttribute("aria-modal"), "true");
+  assert.match(localPreview.getAttribute("aria-label"), /Перетащите/);
+  assert.equal(localPreview.getAttribute("tabindex"), "0");
+  assert.equal(document.body.classList.contains("call-active"), true);
+
+  let boundaryWidth = 390;
+  let boundaryHeight = 844;
+  callScreen.getBoundingClientRect = () => ({
+    left: 0,
+    top: 0,
+    right: boundaryWidth,
+    bottom: boundaryHeight,
+    width: boundaryWidth,
+    height: boundaryHeight,
+  });
+  localPreview.getBoundingClientRect = () => {
+    const left = Number.parseFloat(localPreview.style.left) || 16;
+    const top = Number.parseFloat(localPreview.style.top) || 590;
+    const width = 120;
+    const height = 160;
+
+    return {
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      width,
+      height,
+    };
+  };
+
+  const pointerEvent = (type, properties) =>
+    Object.assign(new window.Event(type, { bubbles: true }), properties);
+
+  localPreview.dispatchEvent(
+    pointerEvent("pointerdown", {
+      button: 0,
+      pointerId: 1,
+      clientX: 76,
+      clientY: 670,
+    }),
+  );
+  window.dispatchEvent(
+    pointerEvent("pointermove", {
+      pointerId: 1,
+      clientX: 340,
+      clientY: 180,
+    }),
+  );
+  window.dispatchEvent(pointerEvent("pointerup", { pointerId: 1 }));
+
+  assert.equal(localPreview.style.left, "258px");
+  assert.equal(localPreview.style.top, "100px");
+
+  boundaryWidth = 200;
+  boundaryHeight = 300;
+  window.dispatchEvent(new window.Event("resize"));
+  assert.equal(localPreview.style.left, "68px");
+  assert.equal(localPreview.style.top, "100px");
+
+  microphoneButton.click();
+  assert.equal(microphoneButton.dataset.enabled, "false");
+  assert.equal(microphoneButton.getAttribute("aria-pressed"), "true");
+  assert.match(microphoneButton.getAttribute("aria-label"), /Включить/);
+
+  cameraButton.click();
+  assert.equal(cameraButton.dataset.enabled, "false");
+  assert.ok(cameraButton.classList.contains("is-off"));
+  assert.ok(localPreview.classList.contains("is-camera-off"));
+
+  document.querySelector("#hangup").click();
+  assert.equal(hangups, 1);
+
+  removeCallModal();
+  assert.equal(document.querySelector("#call-modal"), null);
+  assert.equal(document.body.classList.contains("call-active"), false);
+});
+
+test("audio calls keep the full-screen layout without a camera control", () => {
+  renderCallModal({
+    friendName: "volna_preview",
+    mode: "audio",
+    onToggleMic: () => false,
+    onToggleCamera: () => false,
+    onHangup: () => {},
+  });
+
+  assert.ok(
+    document.querySelector("#call-modal").classList.contains("audio-call"),
+  );
+  assert.equal(document.querySelector("#local-preview"), null);
+  assert.equal(document.querySelector("#toggle-camera"), null);
+
+  removeCallModal();
 });
