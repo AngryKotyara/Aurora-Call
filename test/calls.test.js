@@ -8,6 +8,7 @@ const { document, window } = parseHTML(
 );
 const storage = new Map();
 const audioTrack = {
+  kind: "audio",
   enabled: true,
   stopCalled: false,
   stop() {
@@ -15,10 +16,30 @@ const audioTrack = {
   },
 };
 const videoTrack = {
+  kind: "video",
   enabled: true,
   stopCalled: false,
   stop() {
     this.stopCalled = true;
+  },
+};
+const screenTrackListeners = new Map();
+const screenTrack = {
+  kind: "video",
+  contentHint: "",
+  stopCalled: false,
+  stop() {
+    this.stopCalled = true;
+  },
+  addEventListener(type, listener) {
+    screenTrackListeners.set(type, listener);
+  },
+  removeEventListener(type, listener) {
+    if (screenTrackListeners.get(type) === listener)
+      screenTrackListeners.delete(type);
+  },
+  end() {
+    screenTrackListeners.get("ended")?.();
   },
 };
 const mediaStream = {
@@ -26,6 +47,11 @@ const mediaStream = {
   getAudioTracks: () => [audioTrack],
   getVideoTracks: () => [videoTrack],
 };
+const screenStream = {
+  getTracks: () => [screenTrack],
+  getVideoTracks: () => [screenTrack],
+};
+let displayMediaConstraints = null;
 
 globalThis.document = document;
 globalThis.window = window;
@@ -39,6 +65,10 @@ Object.defineProperty(globalThis, "navigator", {
   value: {
     mediaDevices: {
       getUserMedia: async () => mediaStream,
+      getDisplayMedia: async (constraints) => {
+        displayMediaConstraints = constraints;
+        return screenStream;
+      },
     },
   },
 });
@@ -49,8 +79,24 @@ globalThis.fetch = async () => ({
 
 class PeerConnectionMock {
   connectionState = "connecting";
+  senders = [];
 
-  addTrack() {}
+  addTrack(track) {
+    const sender = {
+      track,
+      replacements: [],
+      async replaceTrack(replacement) {
+        this.track = replacement;
+        this.replacements.push(replacement);
+      },
+    };
+    this.senders.push(sender);
+    return sender;
+  }
+
+  getSenders() {
+    return this.senders;
+  }
 
   async createOffer() {
     return { type: "offer", sdp: "test-offer" };
@@ -70,7 +116,7 @@ globalThis.RTCPeerConnection = PeerConnectionMock;
 const { endCall, startCall } = await import("../src/calls.js");
 const { state } = await import("../src/state.js");
 
-test("call controls update the real media tracks and their visual state", async () => {
+test("call controls update media tracks and restore the camera after screen sharing", async () => {
   state.session = { token: "test-token", username: "aurora_preview" };
   state.selectedFriend = {
     id: "00000000-0000-4000-8000-0000000000e5",
@@ -81,6 +127,7 @@ test("call controls update the real media tracks and their visual state", async 
 
   const microphoneButton = document.querySelector("#toggle-mic");
   const cameraButton = document.querySelector("#toggle-camera");
+  const screenShareButton = document.querySelector("#toggle-screen-share");
 
   microphoneButton.click();
   cameraButton.click();
@@ -103,8 +150,38 @@ test("call controls update the real media tracks and their visual state", async 
   assert.equal(microphoneButton.dataset.enabled, "true");
   assert.equal(cameraButton.dataset.enabled, "true");
 
+  screenShareButton.click();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(displayMediaConstraints, { video: true, audio: false });
+  assert.equal(state.videoSender.track, screenTrack);
+  assert.equal(screenTrack.contentHint, "detail");
+  assert.equal(screenShareButton.dataset.active, "true");
+  assert.equal(screenShareButton.getAttribute("aria-pressed"), "true");
+  assert.match(screenShareButton.getAttribute("aria-label"), /Остановить/);
+  assert.equal(
+    document.querySelector("#call-modal").dataset.localScreenSharing,
+    "true",
+  );
+
+  screenTrack.end();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(state.videoSender.track, videoTrack);
+  assert.equal(screenTrack.stopCalled, true);
+  assert.equal(screenShareButton.dataset.active, "false");
+  assert.equal(screenShareButton.getAttribute("aria-pressed"), "false");
+
+  screenTrack.stopCalled = false;
+  screenShareButton.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(state.screenStream, screenStream);
+
   await endCall({ notifyPeer: false });
   assert.equal(audioTrack.stopCalled, true);
   assert.equal(videoTrack.stopCalled, true);
+  assert.equal(screenTrack.stopCalled, true);
+  assert.equal(state.screenStream, null);
+  assert.equal(state.videoSender, null);
   assert.equal(document.querySelector("#call-modal"), null);
 });
