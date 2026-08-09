@@ -1,8 +1,11 @@
-.home-hero{background:radial-gradient(ellipse at 50% -10%,#38105e 0%,#170c35 32%,#0b0a20 64%,#05060d 100%);}
+.home-hero{background:radial-gradient(ellipse at 50% -10%,#38105e 0%,#170c35 32%,#0b0a20 64%,#05060d 100%);min-height:clamp(560px,72vh,760px);position:relative;}
 .home-hero::after{background:linear-gradient(180deg,#5d159514 0%,transparent 34%,#05060db8 100%);}
+.home-hero .home-copy{position:relative;z-index:3;height:100%;min-height:inherit;}
+.home-hero .hero-brand{position:absolute;top:34px;left:34px;z-index:4;}
+.home-hero .stay-in-touch-copy h1{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;width:max-content;max-width:88%;text-align:center;font-family:"Snell Roundhand","Segoe Script","Brush Script MT",cursive;font-size:clamp(58px,9vw,112px);font-weight:600;line-height:.9;letter-spacing:-.035em;color:#fff7ff;text-shadow:0 0 8px #ffffff70,0 0 24px #e657ff99,0 0 54px #7f5cff66;}
 .xperia-flow{position:absolute;z-index:1;inset:0;overflow:hidden;pointer-events:none;isolation:isolate;contain:paint;}
 .xperia-flow::before{position:absolute;inset:-12%;content:"";background:radial-gradient(ellipse at 45% 58%,#bd3cff1f 0%,transparent 38%),radial-gradient(ellipse at 76% 54%,#405dff1d 0%,transparent 31%),radial-gradient(ellipse at 18% 62%,#7d31ff16 0%,transparent 34%);opacity:.82;transform:translate3d(0,0,0);animation:smoke-ambient 9s ease-in-out infinite alternate;}
-.xperia-flow svg{position:absolute;left:-10%;bottom:-4%;width:120%;height:80%;overflow:visible;filter:saturate(1.15);transform:translate3d(0,0,0);}
+.xperia-flow svg{position:absolute;left:-10%;top:22%;width:120%;height:62%;overflow:visible;filter:saturate(1.15);transform:translate3d(0,0,0);}
 .smoke-layer,.smoke-filament{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;transform-box:fill-box;transform-origin:center;will-change:transform,opacity;backface-visibility:hidden;}
 .smoke-back{stroke:url(#auroraSmokeGradientB);stroke-width:112;opacity:.18;filter:blur(13px);animation:smoke-drift-a 13s ease-in-out infinite alternate;}
 .smoke-mid{stroke:url(#auroraSmokeGradientA);stroke-width:78;opacity:.28;filter:blur(8px);animation:smoke-drift-b 10.5s ease-in-out infinite alternate;}
@@ -15,5 +18,5 @@
 @keyframes smoke-line-a{0%{transform:translate3d(-24px,5px,0) scale3d(1,.95,1);opacity:.72}50%{transform:translate3d(9px,-7px,0) scale3d(1,1.05,1);opacity:.96}100%{transform:translate3d(30px,4px,0) scale3d(1,.98,1);opacity:.8}}
 @keyframes smoke-line-b{0%{transform:translate3d(20px,-5px,0) scale3d(1,1.04,1)}50%{transform:translate3d(-10px,7px,0) scale3d(1,.95,1)}100%{transform:translate3d(-30px,-4px,0) scale3d(1,1.05,1)}}
 @keyframes smoke-ambient{from{opacity:.58;transform:translate3d(-1%,.5%,0) scale(1)}to{opacity:.9;transform:translate3d(1%,-.5%,0) scale(1.03)}}
-@media(max-width:600px){.smoke-back{stroke-width:96;filter:blur(9px)}.smoke-mid{stroke-width:68;filter:blur(6px)}.smoke-front{stroke-width:44;filter:blur(3px)}.smoke-filament-main,.smoke-filament-pink{filter:none}.xperia-flow::before{opacity:.7}}
+@media(max-width:600px){.home-hero{min-height:620px}.home-hero .hero-brand{top:30px;left:26px}.home-hero .stay-in-touch-copy h1{font-size:clamp(54px,15vw,78px);max-width:84%}.xperia-flow svg{top:24%;height:58%}.smoke-back{stroke-width:96;filter:blur(9px)}.smoke-mid{stroke-width:68;filter:blur(6px)}.smoke-front{stroke-width:44;filter:blur(3px)}.smoke-filament-main,.smoke-filament-pink{filter:none}.xperia-flow::before{opacity:.7}}
 @media(prefers-reduced-motion:reduce){.xperia-flow::before,.smoke-layer,.smoke-filament{animation:none!important}}
