@@ -97,9 +97,9 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/AuroraCall.xcarchive" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY='Apple Distribution' \
-            "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]=$APP_PROFILE_NAME" \
+            AURORA_APP_PROFILE="$APP_PROFILE_NAME" \
+            AURORA_BROADCAST_PROFILE="$BROADCAST_PROFILE_NAME" \
             archive | tee ios-archive.log
 
       - name: Create export options
