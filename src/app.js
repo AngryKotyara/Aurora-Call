@@ -2,6 +2,7 @@ import { rpc } from "./api.js";
 import { applyBranding } from "./branding.js";
 import { startCall, startSignalPolling } from "./calls.js";
 import { initChat } from "./chat.js";
+import { installIncomingCallAlerting } from "./incoming-call.js";
 import {
   inspectMediaPermissions,
   requestMediaPermissions,
@@ -18,6 +19,7 @@ import {
 } from "./utils.js";
 
 applyBranding();
+installIncomingCallAlerting();
 
 async function register(username) {
   try {
