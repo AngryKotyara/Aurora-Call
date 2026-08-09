@@ -1,6 +1,7 @@
 let audioContext = null;
 let ringInterval = null;
 let vibrationInterval = null;
+let confirmInstalled = false;
 
 function tone(frequency, startsAt, duration, gainValue = 0.055) {
   if (!audioContext) return;
@@ -26,7 +27,7 @@ function playRingPhrase() {
     tone(987.77, now + 0.65, 0.38);
     tone(783.99, now + 1.08, 0.24, 0.04);
   } catch {
-    // Audio notifications are best-effort when browser autoplay policy blocks them.
+    // Browser autoplay policy can block sound before the first user gesture.
   }
 }
 
@@ -35,11 +36,12 @@ function vibrate() {
     navigator.vibrate?.([450, 180, 450, 900]);
     window.webkit?.messageHandlers?.auroraHaptics?.postMessage?.({ type: "incoming-call" });
   } catch {
-    // Haptics are best-effort.
+    // Haptics are best-effort across browser and native shells.
   }
 }
 
 function startAlerting() {
+  stopIncomingCallAlert();
   playRingPhrase();
   vibrate();
   ringInterval = window.setInterval(playRingPhrase, 2200);
@@ -52,6 +54,24 @@ export function stopIncomingCallAlert() {
   ringInterval = null;
   vibrationInterval = null;
   try { navigator.vibrate?.(0); } catch {}
+}
+
+export function installIncomingCallAlerting() {
+  if (confirmInstalled) return;
+  confirmInstalled = true;
+  const originalConfirm = window.confirm.bind(window);
+
+  window.confirm = (message = "") => {
+    const isIncomingCall = /звонит\.\s*Принять\?/i.test(String(message));
+    if (!isIncomingCall) return originalConfirm(message);
+
+    startAlerting();
+    try {
+      return originalConfirm(message);
+    } finally {
+      stopIncomingCallAlert();
+    }
+  };
 }
 
 export function showIncomingCall({ name, mode = "audio" }) {
