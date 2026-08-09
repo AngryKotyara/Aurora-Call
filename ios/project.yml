@@ -7,6 +7,9 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1,2"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
 
 targets:
   AuroraCall:
@@ -18,8 +21,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.auroracall
+        PRODUCT_NAME: AuroraCall
         INFOPLIST_FILE: AuroraCall/Info.plist
         CODE_SIGN_ENTITLEMENTS: AuroraCall/AuroraCall.entitlements
+        ENABLE_BITCODE: NO
     dependencies:
       - target: AuroraCallBroadcast
         embed: true
@@ -33,6 +38,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.auroracall.broadcast
+        PRODUCT_NAME: AuroraCallBroadcast
         INFOPLIST_FILE: BroadcastUploadExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: BroadcastUploadExtension/AuroraCallBroadcast.entitlements
         SKIP_INSTALL: YES
+        ENABLE_BITCODE: NO
