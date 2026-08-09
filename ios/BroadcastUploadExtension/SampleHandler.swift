@@ -1,80 +1,113 @@
+import CoreImage
 import CoreMedia
 import ReplayKit
 
-/// Entry point for full-device screen capture on iOS.
-///
-/// This target receives ReplayKit sample buffers. The next integration step is
-/// to feed `.video` buffers into Aurora Call's native WebRTC video source and
-/// publish that track to the active call. Audio is intentionally ignored here
-/// because Aurora Call already keeps the call microphone on the main call path.
 final class SampleHandler: RPBroadcastSampleHandler {
+    private let relay = ReplayKitFrameRelay()
+
     override func broadcastStarted(withSetupInfo setupInfo: [String : NSObject]?) {
-        BroadcastSession.shared.start()
+        relay.start()
     }
 
     override func broadcastPaused() {
-        BroadcastSession.shared.pause()
+        relay.pause()
     }
 
     override func broadcastResumed() {
-        BroadcastSession.shared.resume()
+        relay.resume()
     }
 
     override func broadcastFinished() {
-        BroadcastSession.shared.stop()
+        relay.stop()
     }
 
     override func processSampleBuffer(
         _ sampleBuffer: CMSampleBuffer,
         with sampleBufferType: RPSampleBufferType
     ) {
-        switch sampleBufferType {
-        case .video:
-            BroadcastSession.shared.consumeVideo(sampleBuffer)
-        case .audioApp, .audioMic:
-            break
-        @unknown default:
-            break
-        }
+        guard sampleBufferType == .video else { return }
+        relay.consume(sampleBuffer)
     }
 }
 
-/// Small boundary between ReplayKit and the future native WebRTC sender.
-/// Keeping this isolated lets the WebRTC implementation be added without
-/// changing ReplayKit lifecycle code.
-final class BroadcastSession {
-    static let shared = BroadcastSession()
-
-    private(set) var isRunning = false
-    private(set) var isPaused = false
-
-    private init() {}
+private final class ReplayKitFrameRelay {
+    private let context = CIContext(options: [.cacheIntermediates: false])
+    private let colorSpace = CGColorSpaceCreateDeviceRGB()
+    private let minimumFrameInterval = 1.0 / 12.0
+    private var lastFrameTime: CFTimeInterval = 0
+    private var isRunning = false
+    private var isPaused = false
 
     func start() {
         isRunning = true
         isPaused = false
-        // TODO: read active Aurora Call call/session metadata from an App Group
-        // container and establish the native WebRTC screen-share transport.
+        lastFrameTime = 0
+        ScreenShareFiles.writeStatus("running")
     }
 
     func pause() {
         isPaused = true
+        ScreenShareFiles.writeStatus("paused")
     }
 
     func resume() {
         isPaused = false
+        ScreenShareFiles.writeStatus("running")
     }
 
     func stop() {
         isRunning = false
         isPaused = false
-        // TODO: close the native WebRTC screen-share transport and signal the
-        // remote peer that screen sharing stopped.
+        ScreenShareFiles.writeStatus("stopped")
+        if let frameURL = ScreenShareFiles.frameURL {
+            try? FileManager.default.removeItem(at: frameURL)
+        }
+        if let metadataURL = ScreenShareFiles.metadataURL {
+            try? FileManager.default.removeItem(at: metadataURL)
+        }
     }
 
-    func consumeVideo(_ sampleBuffer: CMSampleBuffer) {
-        guard isRunning, !isPaused else { return }
-        // TODO: convert CMSampleBuffer/CVPixelBuffer to the video frame type
-        // expected by the chosen native WebRTC SDK and push it to the sender.
+    func consume(_ sampleBuffer: CMSampleBuffer) {
+        guard isRunning, !isPaused,
+              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
+              let frameURL = ScreenShareFiles.frameURL,
+              let metadataURL = ScreenShareFiles.metadataURL else { return }
+
+        let now = CACurrentMediaTime()
+        guard now - lastFrameTime >= minimumFrameInterval else { return }
+        lastFrameTime = now
+
+        var image = CIImage(cvPixelBuffer: pixelBuffer)
+        let sourceWidth = image.extent.width
+        let sourceHeight = image.extent.height
+        let longestSide = max(sourceWidth, sourceHeight)
+        let scale = min(1.0, 1280.0 / longestSide)
+
+        if scale < 1.0 {
+            image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        }
+
+        guard let jpeg = context.jpegRepresentation(
+            of: image,
+            colorSpace: colorSpace,
+            options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.58]
+        ) else { return }
+
+        let width = Int(image.extent.width.rounded())
+        let height = Int(image.extent.height.rounded())
+        let metadata: [String: Any] = [
+            "width": width,
+            "height": height,
+            "timestamp": Date().timeIntervalSince1970,
+        ]
+
+        guard let metadataData = try? JSONSerialization.data(withJSONObject: metadata) else { return }
+
+        do {
+            try jpeg.write(to: frameURL, options: .atomic)
+            try metadataData.write(to: metadataURL, options: .atomic)
+        } catch {
+            ScreenShareFiles.writeStatus("failed")
+        }
     }
 }
