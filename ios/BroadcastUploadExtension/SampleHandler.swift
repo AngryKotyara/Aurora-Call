@@ -1,6 +1,8 @@
 import CoreImage
 import CoreMedia
+import QuartzCore
 import ReplayKit
+import UIKit
 
 final class SampleHandler: RPBroadcastSampleHandler {
     private let relay = ReplayKitFrameRelay()
@@ -32,7 +34,6 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
 private final class ReplayKitFrameRelay {
     private let context = CIContext(options: [.cacheIntermediates: false])
-    private let colorSpace = CGColorSpaceCreateDeviceRGB()
     private let minimumFrameInterval = 1.0 / 12.0
     private var lastFrameTime: CFTimeInterval = 0
     private var isRunning = false
@@ -78,29 +79,22 @@ private final class ReplayKitFrameRelay {
         lastFrameTime = now
 
         var image = CIImage(cvPixelBuffer: pixelBuffer)
-        let sourceWidth = image.extent.width
-        let sourceHeight = image.extent.height
-        let longestSide = max(sourceWidth, sourceHeight)
+        let longestSide = max(image.extent.width, image.extent.height)
         let scale = min(1.0, 1280.0 / longestSide)
-
         if scale < 1.0 {
             image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         }
 
-        guard let jpeg = context.jpegRepresentation(
-            of: image,
-            colorSpace: colorSpace,
-            options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.58]
-        ) else { return }
+        guard let cgImage = context.createCGImage(image, from: image.extent),
+              let jpeg = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.58) else {
+            return
+        }
 
-        let width = Int(image.extent.width.rounded())
-        let height = Int(image.extent.height.rounded())
         let metadata: [String: Any] = [
-            "width": width,
-            "height": height,
+            "width": cgImage.width,
+            "height": cgImage.height,
             "timestamp": Date().timeIntervalSince1970,
         ]
-
         guard let metadataData = try? JSONSerialization.data(withJSONObject: metadata) else { return }
 
         do {
