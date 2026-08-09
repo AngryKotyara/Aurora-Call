@@ -7,8 +7,10 @@ const EDGE_URL = "https://taqpirplpmjihmkztwlv.supabase.co/functions/v1/aurora-c
 const CHUNK_SIZE = 6 * 1024 * 1024;
 const MAX_BYTES = 1024 * 1024 * 1024;
 const RETRIES = [0, 1000, 3000, 5000, 10000, 20000];
+const FINALIZE_RETRIES = [0, 300, 800, 1600, 3000];
 
 let activeFriend = null;
+let inputObserver = null;
 
 function rememberFriend(id, name = "") {
   if (!id) return;
@@ -62,7 +64,7 @@ async function getTicket(file, friend) {
     token: state.session?.token,
     to: friend.id,
     kind: file.type.startsWith("image/") ? "image" : "video",
-    mime: file.type,
+    mime: file.type || "video/quicktime",
     name: file.name,
     size: file.size,
   });
@@ -96,7 +98,10 @@ async function createTusUpload(file, ticket) {
       apikey: config.supabasePublishableKey,
     },
   });
-  if (!response.ok) throw new Error(`tus_create_${response.status}`);
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`tus_create_${response.status}${text ? `:${text.slice(0, 180)}` : ""}`);
+  }
   const location = response.headers.get("Location");
   if (!location) throw new Error("tus_missing_location");
   return new URL(location, ticket.endpoint).href;
@@ -114,7 +119,10 @@ async function patchChunk(url, ticket, blob, offset) {
     },
     body: blob,
   });
-  if (!response.ok) throw new Error(`tus_patch_${response.status}`);
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`tus_patch_${response.status}${text ? `:${text.slice(0, 180)}` : ""}`);
+  }
   return Number(response.headers.get("Upload-Offset") || (offset + blob.size));
 }
 
@@ -150,7 +158,7 @@ async function resumableUpload(file, friend, onProgress) {
     localStorage.setItem(key, JSON.stringify(ticket));
   }
 
-  onProgress(Math.round((offset / file.size) * 96));
+  onProgress(Math.min(96, Math.round((offset / file.size) * 96)));
 
   while (offset < file.size) {
     const end = Math.min(file.size, offset + CHUNK_SIZE);
@@ -178,8 +186,10 @@ async function resumableUpload(file, friend, onProgress) {
     onProgress(Math.min(96, Math.max(1, Math.round((offset / file.size) * 96))));
   }
 
-  localStorage.removeItem(key);
-  return ticket;
+  // Keep the resumable ticket until the chat message is successfully finalized.
+  // If finalization fails, choosing the same file again will HEAD the completed upload
+  // and only retry message creation instead of re-uploading the video.
+  return { ticket, key };
 }
 
 function createUploadBubble(file) {
@@ -210,7 +220,30 @@ function createUploadBubble(file) {
   };
 }
 
-async function handleFile(file) {
+async function finalizeMessage(file, friend, ticket) {
+  let lastError = null;
+  for (const delay of FINALIZE_RETRIES) {
+    try {
+      await sleep(delay);
+      return await rpc("complete_chat_storage_media", {
+        p_token: state.session.token,
+        p_to: friend.id,
+        p_kind: file.type.startsWith("image/") ? "image" : "video",
+        p_body: null,
+        p_media_mime: file.type || "video/quicktime",
+        p_media_name: file.name,
+        p_object_path: ticket.path,
+        p_size: file.size,
+      });
+    } catch (error) {
+      lastError = error;
+      console.warn("Aurora media finalize retry", error);
+    }
+  }
+  throw lastError || new Error("finalize_failed");
+}
+
+export async function handleResumableMedia(file) {
   const friend = activeFriend;
   if (!friend?.id || !state.session?.token) {
     showToast("Откройте чат с другом и попробуйте снова");
@@ -227,40 +260,60 @@ async function handleFile(file) {
 
   const ui = createUploadBubble(file);
   try {
-    const ticket = await resumableUpload(file, friend, (value) => ui.update(value));
+    const { ticket, key } = await resumableUpload(file, friend, (value) => ui.update(value));
     ui.update(97, "Сохраняем сообщение…");
-    await rpc("complete_chat_storage_media", {
-      p_token: state.session.token,
-      p_to: friend.id,
-      p_kind: file.type.startsWith("image/") ? "image" : "video",
-      p_body: null,
-      p_media_mime: file.type,
-      p_media_name: file.name,
-      p_object_path: ticket.path,
-      p_size: file.size,
-    });
+    await finalizeMessage(file, friend, ticket);
+    localStorage.removeItem(key);
     ui.update(100, "Отправлено");
     window.setTimeout(() => {
-      if (ui.article.isConnected) ui.article.style.opacity = ".7";
-    }, 350);
+      ui.article.remove();
+      document.dispatchEvent(new CustomEvent("aurora-chat-media-complete"));
+    }, 450);
   } catch (error) {
     console.error("Resumable upload failed", error);
     ui.article.classList.add("is-failed");
-    ui.update(0, "Ошибка — выберите файл снова для продолжения");
-    showToast("Не удалось отправить файл. Повторная попытка продолжит загрузку.");
+    const ring = ui.article.querySelector(".chat-upload-ring b");
+    const current = Number.parseInt(ring?.textContent || "0", 10) || 0;
+    ui.update(current, current >= 96 ? "Не удалось сохранить сообщение — повторите файл" : "Ошибка загрузки — повторите файл");
+    showToast(current >= 96 ? "Видео загружено. Выберите тот же файл ещё раз — повторно загружать его не придётся." : "Не удалось отправить файл. Повторная попытка продолжит загрузку.");
   } finally {
     URL.revokeObjectURL(ui.preview);
   }
 }
 
+function bindInput(input) {
+  if (!(input instanceof HTMLInputElement) || !input.classList.contains("chat-file")) return;
+  if (input.dataset.resumableBound === "true") return;
+  input.dataset.resumableBound = "true";
+
+  // Replace the legacy property handler so video can never fall back to Base64/RPC.
+  input.onchange = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const file = input.files?.[0];
+    if (!file) return;
+    void handleResumableMedia(file);
+    input.value = "";
+  };
+}
+
+function bindInputs() {
+  document.querySelectorAll("input.chat-file").forEach(bindInput);
+}
+
+// Capture remains as an extra guard for older cached chat modules.
 document.addEventListener("change", (event) => {
   const input = event.target;
   if (!(input instanceof HTMLInputElement) || !input.classList.contains("chat-file")) return;
   const file = input.files?.[0];
   if (!file) return;
-
   event.preventDefault();
   event.stopImmediatePropagation();
-  void handleFile(file);
+  void handleResumableMedia(file);
   input.value = "";
 }, true);
+
+bindInputs();
+inputObserver = new MutationObserver(bindInputs);
+inputObserver.observe(document.documentElement, { childList: true, subtree: true });
+window.auroraHandleResumableMedia = handleResumableMedia;
