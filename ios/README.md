@@ -1,32 +1,74 @@
 # Aurora Call — iOS screen sharing
 
-Aurora Call's browser client uses `getDisplayMedia()` on platforms that expose it. Full-device screen sharing on iPhone/iPad requires a native iOS target because the browser cannot provide the screen as a WebRTC `MediaStreamTrack`.
+Полноэкранная демонстрация iPhone/iPad реализована через ReplayKit Broadcast Upload Extension и существующий WebRTC-звонок Aurora Call.
 
-## Native architecture
+## Как проходит видео
 
-1. The Aurora Call iOS host app embeds the existing web UI in `WKWebView`.
-2. The screen-share button sends a native bridge message from the web UI.
-3. The host app presents `RPSystemBroadcastPickerView` configured for the Aurora Call Broadcast Upload Extension.
-4. `BroadcastUploadExtension/SampleHandler.swift` receives ReplayKit video sample buffers.
-5. The extension reads the active call/session metadata from an App Group container and sends the captured frames through a native WebRTC video track.
-6. The remote Aurora Call peer receives the screen-share video and the existing `screen-share` signal continues to drive layout/status state.
+1. Веб-интерфейс внутри `WKWebView` отправляет `auroraScreenShare/start`.
+2. `ScreenBroadcastPicker` открывает системный ReplayKit Broadcast Picker.
+3. `AuroraCallBroadcast` получает кадры полного экрана через `RPBroadcastSampleHandler`.
+4. Extension ограничивает поток примерно до 12 кадров/с, масштабирует длинную сторону максимум до 1280 px и записывает последний JPEG-кадр в общий App Group.
+5. Основное iOS-приложение читает новые кадры из App Group и передаёт их в JavaScript.
+6. `src/ios-screen-share.js` рисует кадры на скрытый canvas и создаёт `canvas.captureStream()`.
+7. `src/calls.js` заменяет текущий WebRTC video sender на этот track. Существующий микрофон и сигнализация звонка продолжают работать без второго PeerConnection.
+8. После остановки ReplayKit приложение возвращает track камеры и отправляет собеседнику `screen-share: false`.
 
-## Xcode targets required
+## Сборка проекта
 
-Create these targets in an Xcode iOS project:
+Проект описан в `project.yml` для XcodeGen. На Mac:
 
-- `AuroraCall` — main application target.
-- `AuroraCallBroadcast` — Broadcast Upload Extension.
+```bash
+cd ios
+brew install xcodegen
+xcodegen generate
+open AuroraCall.xcodeproj
+```
 
-Use the same App Group on both targets, for example `group.app.auroracall`, and set the broadcast extension bundle identifier to the value used by `ScreenBroadcastPicker.preferredExtensionBundleIdentifier`.
+В Xcode выберите свою Team для обоих targets: `AuroraCall` и `AuroraCallBroadcast`.
 
-## Files already included
+## App Group
 
-- `AuroraCall/ScreenBroadcastPicker.swift` presents Apple's broadcast picker from a user gesture.
-- `BroadcastUploadExtension/SampleHandler.swift` contains ReplayKit lifecycle handling and receives screen video sample buffers.
+Оба targets должны иметь один и тот же App Group:
 
-## Remaining native WebRTC work
+```text
+group.app.auroracall
+```
 
-A WebRTC iOS SDK must be linked to both the host app and the broadcast extension. The extension's `BroadcastSession.consumeVideo(_:)` must convert ReplayKit `CMSampleBuffer` / `CVPixelBuffer` frames into the SDK's video-frame type and publish them as the screen-share track. Active call identifiers, peer identifiers, authentication/signaling data, and start/stop state should be shared through the App Group container.
+Он уже указан в обоих `.entitlements` и в `Shared/ScreenShareFiles.swift`. App Group нужно создать/разрешить для вашего Apple Developer Team в Signing & Capabilities. Если поменять identifier, поменяйте его во всех трёх местах.
 
-Do not fake `getDisplayMedia()` inside `WKWebView`: ReplayKit buffers are native sample buffers and are not a browser `MediaStream`. The screen-share path therefore needs to remain a dedicated native WebRTC transport on iOS.
+## Bundle identifiers
+
+Основное приложение:
+
+```text
+app.auroracall
+```
+
+Broadcast Upload Extension:
+
+```text
+app.auroracall.broadcast
+```
+
+Extension identifier совпадает с `ScreenBroadcastPicker.preferredExtensionBundleIdentifier`.
+
+## Адрес веб-приложения
+
+`AuroraCall/Info.plist` содержит `AuroraWebURL`. По умолчанию установлен:
+
+```text
+https://aurora-call.vercel.app
+```
+
+Если production Aurora Call опубликован по другому адресу, измените только `AuroraWebURL`; Swift-код менять не требуется.
+
+## Проверка на iPhone
+
+1. Установите подписанную сборку Aurora Call на физический iPhone.
+2. Начните видеозвонок.
+3. Нажмите кнопку демонстрации экрана.
+4. В системном окне выберите Aurora Call Screen и нажмите Start Broadcast.
+5. Кнопка станет активной после получения первого ReplayKit-кадра; собеседник должен увидеть экран вместо камеры.
+6. Остановите Broadcast из системного интерфейса или повторным нажатием кнопки — Aurora Call вернёт камеру.
+
+ReplayKit требует явного действия пользователя для запуска системной трансляции; приложение не пытается обходить это ограничение.
