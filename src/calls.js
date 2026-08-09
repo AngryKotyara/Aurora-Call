@@ -130,9 +130,10 @@ export async function toggleScreenShare() {
 
   const callId = state.callId;
   const videoSender = state.videoSender;
-  const getDisplayMedia = navigator.mediaDevices?.getDisplayMedia?.bind(
-    navigator.mediaDevices,
-  );
+  const getDisplayMedia =
+    navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices) ||
+    navigator.getDisplayMedia?.bind(navigator) ||
+    null;
 
   if (
     state.callMode !== "video" ||
@@ -144,7 +145,9 @@ export async function toggleScreenShare() {
   }
 
   if (!getDisplayMedia) {
-    showToast("Этот браузер не поддерживает демонстрацию экрана");
+    showToast(
+      "Этот браузер не поддерживает захват экрана. Попробуйте открыть Aurora Call в Chrome или Edge на компьютере.",
+    );
     return false;
   }
 
@@ -268,10 +271,7 @@ export async function startCall(mode, incoming = false, offer = null) {
       onToggleMic: () => toggleTracks("audio"),
       onToggleCamera: () => toggleTracks("video"),
       onToggleScreenShare: toggleScreenShare,
-      canShareScreen: Boolean(
-        navigator.mediaDevices?.getDisplayMedia &&
-        state.videoSender?.replaceTrack,
-      ),
+      canShareScreen: mode === "video",
       onHangup: () => void endCall(),
     });
     query("#local-video").srcObject = state.mediaStream;
