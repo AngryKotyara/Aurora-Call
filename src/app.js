@@ -161,17 +161,20 @@ async function render(activeScreen = "home") {
     rpc("list_call_history", {
       p_token: state.session.token,
     }).catch(() => []),
-    inspectMediaPermissions(state.session),
+    inspectMediaPermissions(state.session).catch((error) => {
+      console.warn("Media permission inspection failed during startup", error);
+      return { status: "prompt" };
+    }),
   ]);
-  state.friends = friends;
-  state.callHistory = callHistory;
+  state.friends = Array.isArray(friends) ? friends : [];
+  state.callHistory = Array.isArray(callHistory) ? callHistory : [];
 
   renderMain({
     activeScreen,
     session: state.session,
     friends: state.friends,
     callHistory: state.callHistory,
-    mediaPermission,
+    mediaPermission: mediaPermission || { status: "prompt" },
     onNavigate: render,
     onSelectFriend: selectFriend,
     onCall: (mode, friend) => void beginCall(mode, friend || null),
@@ -183,15 +186,26 @@ async function render(activeScreen = "home") {
 }
 
 async function bootstrap() {
-  await render();
-  await acceptInviteFromUrl();
-  initChat();
-  installNavPolish();
+  try {
+    await render();
+  } catch (error) {
+    console.error("Aurora startup render failed", error);
+    const root = document.getElementById("root");
+    if (root) {
+      root.innerHTML = `<main class="app"><div class="card"><h1>Aurora Call</h1><p class="muted">Не удалось загрузить данные. Интерфейс запущен в безопасном режиме.</p><button id="aurora-retry-start" class="btn">Повторить</button></div></main>`;
+      document.getElementById("aurora-retry-start")?.addEventListener("click", () => location.reload());
+    }
+    return;
+  }
+
+  try { await acceptInviteFromUrl(); } catch (error) { console.warn("Invite bootstrap failed", error); }
+  try { initChat(); } catch (error) { console.warn("Chat bootstrap failed", error); }
+  try { installNavPolish(); } catch (error) { console.warn("Navigation polish failed", error); }
   document.addEventListener("aurora-chat-call", (event) => {
     const mode = event.detail?.mode === "video" ? "video" : "audio";
     void beginCall(mode, state.selectedFriend);
   });
-  startSignalPolling();
+  try { startSignalPolling(); } catch (error) { console.warn("Signal polling failed", error); }
 }
 
 void bootstrap();
