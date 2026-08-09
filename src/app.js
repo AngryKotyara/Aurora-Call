@@ -1,5 +1,6 @@
 import { rpc } from "./api.js";
 import { applyBranding } from "./branding.js";
+import { pickCallContact } from "./call-picker.js";
 import { startCall, startSignalPolling } from "./calls.js";
 import { initChat } from "./chat.js";
 import { installIncomingCallAlerting } from "./incoming-call.js";
@@ -7,6 +8,7 @@ import {
   inspectMediaPermissions,
   requestMediaPermissions,
 } from "./media-permissions.js";
+import { installNavPolish } from "./nav-polish.js";
 import { clearSession, saveSession, state } from "./state.js";
 import { renderAuth, renderInvite, renderMain } from "./ui.js";
 import {
@@ -138,6 +140,14 @@ async function grantMediaAccess(activeScreen) {
   await render(activeScreen);
 }
 
+async function beginCall(mode, friend = null) {
+  let target = friend;
+  if (!target) target = await pickCallContact(state.friends || [], mode);
+  if (!target) return;
+  state.selectedFriend = target;
+  void startCall(mode);
+}
+
 async function render(activeScreen = "home") {
   if (!state.session) {
     renderAuth({ onRegister: register, onLogin: login });
@@ -164,10 +174,7 @@ async function render(activeScreen = "home") {
     mediaPermission,
     onNavigate: render,
     onSelectFriend: selectFriend,
-    onCall: (mode, friend) => {
-      if (friend) state.selectedFriend = friend;
-      void startCall(mode);
-    },
+    onCall: (mode, friend) => void beginCall(mode, friend || null),
     onGenerateInvite: generateInvite,
     onDeleteFriend: deleteFriend,
     onRequestMediaAccess: () => grantMediaAccess(activeScreen),
@@ -179,9 +186,10 @@ async function bootstrap() {
   await render();
   await acceptInviteFromUrl();
   initChat();
+  installNavPolish();
   document.addEventListener("aurora-chat-call", (event) => {
     const mode = event.detail?.mode === "video" ? "video" : "audio";
-    void startCall(mode);
+    void beginCall(mode, state.selectedFriend);
   });
   startSignalPolling();
 }
