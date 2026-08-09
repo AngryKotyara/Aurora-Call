@@ -9,7 +9,9 @@
       content="Aurora Call — аудио- и видеозвонки между друзьями в браузере."
     />
     <link rel="preconnect" href="https://taqpirplpmjihmkztwlv.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://taqpirplpmjihmkztwlv.storage.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="//taqpirplpmjihmkztwlv.supabase.co" />
+    <link rel="dns-prefetch" href="//taqpirplpmjihmkztwlv.storage.supabase.co" />
     <link id="app-icon" rel="icon" type="image/png" />
     <link id="apple-touch-icon" rel="apple-touch-icon" />
     <title>Aurora Call</title>
@@ -21,7 +23,9 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/media-compression-hook.js"></script>
+    <script type="module" src="/src/resumable-media.js"></script>
     <script type="module" src="/src/app.js"></script>
+    <script type="module" src="/src/storage-media-hydrator.js"></script>
     <script type="module" src="/src/interaction-polish.js"></script>
   </body>
 </html>
