@@ -1,0 +1,177 @@
+name: iOS App Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_app_store:
+        description: Upload the exported IPA to App Store Connect
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  archive:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APP_BUNDLE_ID: app.auroracall
+      BROADCAST_BUNDLE_ID: app.auroracall.broadcast
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26.6
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Validate signing secrets
+        env:
+          P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          APP_PROFILE: ${{ secrets.IOS_APP_PROFILE_BASE64 }}
+          BROADCAST_PROFILE: ${{ secrets.IOS_BROADCAST_PROFILE_BASE64 }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$P12" || { echo "Missing IOS_DISTRIBUTION_P12_BASE64"; exit 1; }
+          test -n "$P12_PASSWORD" || { echo "Missing IOS_DISTRIBUTION_P12_PASSWORD"; exit 1; }
+          test -n "$APP_PROFILE" || { echo "Missing IOS_APP_PROFILE_BASE64"; exit 1; }
+          test -n "$BROADCAST_PROFILE" || { echo "Missing IOS_BROADCAST_PROFILE_BASE64"; exit 1; }
+          test -n "$TEAM_ID" || { echo "Missing APPLE_TEAM_ID"; exit 1; }
+
+      - name: Install distribution certificate
+        env:
+          P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/distribution.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/aurora-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          echo "$P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+      - name: Install provisioning profiles
+        id: profiles
+        env:
+          APP_PROFILE_BASE64: ${{ secrets.IOS_APP_PROFILE_BASE64 }}
+          BROADCAST_PROFILE_BASE64: ${{ secrets.IOS_BROADCAST_PROFILE_BASE64 }}
+        run: |
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          install_profile() {
+            local encoded="$1"
+            local label="$2"
+            local source="$RUNNER_TEMP/$label.mobileprovision"
+            local plist="$RUNNER_TEMP/$label.plist"
+            echo "$encoded" | base64 --decode > "$source"
+            security cms -D -i "$source" > "$plist"
+            local uuid=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$plist")
+            local name=$(/usr/libexec/PlistBuddy -c 'Print Name' "$plist")
+            cp "$source" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+            echo "$label-name=$name" >> "$GITHUB_OUTPUT"
+          }
+          install_profile "$APP_PROFILE_BASE64" app
+          install_profile "$BROADCAST_PROFILE_BASE64" broadcast
+
+      - name: Archive
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_PROFILE_NAME: ${{ steps.profiles.outputs.app-name }}
+          BROADCAST_PROFILE_NAME: ${{ steps.profiles.outputs.broadcast-name }}
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/AuroraCall.xcodeproj \
+            -scheme AuroraCall \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/AuroraCall.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY='Apple Distribution' \
+            "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]=$APP_PROFILE_NAME" \
+            archive | tee ios-archive.log
+
+      - name: Create export options
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_PROFILE_NAME: ${{ steps.profiles.outputs.app-name }}
+          BROADCAST_PROFILE_NAME: ${{ steps.profiles.outputs.broadcast-name }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>stripSwiftSymbols</key><true/>
+            <key>uploadSymbols</key><true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$APP_BUNDLE_ID</key><string>$APP_PROFILE_NAME</string>
+              <key>$BROADCAST_BUNDLE_ID</key><string>$BROADCAST_PROFILE_NAME</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Export IPA
+        run: |
+          mkdir -p "$RUNNER_TEMP/export"
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/AuroraCall.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+          ls -la "$RUNNER_TEMP/export"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AuroraCall-AppStore
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
+
+      - name: Validate App Store Connect upload secrets
+        if: ${{ inputs.upload_to_app_store }}
+        env:
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          test -n "$API_KEY" || { echo "Missing APP_STORE_CONNECT_API_KEY_BASE64"; exit 1; }
+          test -n "$KEY_ID" || { echo "Missing APP_STORE_CONNECT_KEY_ID"; exit 1; }
+          test -n "$ISSUER_ID" || { echo "Missing APP_STORE_CONNECT_ISSUER_ID"; exit 1; }
+
+      - name: Upload to App Store Connect
+        if: ${{ inputs.upload_to_app_store }}
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          echo "$API_KEY_BASE64" | base64 --decode > "$HOME/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8"
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' -print -quit)
+          xcrun altool --validate-app -f "$IPA" -t ios --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+          xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+
+      - name: Upload archive log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-store-archive-log
+          path: ios-archive.log
