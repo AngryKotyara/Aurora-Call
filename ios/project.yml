@@ -1,0 +1,38 @@
+name: AuroraCall
+options:
+  bundleIdPrefix: app.auroracall
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+
+targets:
+  AuroraCall:
+    type: application
+    platform: iOS
+    sources:
+      - path: AuroraCall
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.auroracall
+        INFOPLIST_FILE: AuroraCall/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AuroraCall/AuroraCall.entitlements
+    dependencies:
+      - target: AuroraCallBroadcast
+        embed: true
+
+  AuroraCallBroadcast:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BroadcastUploadExtension
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.auroracall.broadcast
+        INFOPLIST_FILE: BroadcastUploadExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BroadcastUploadExtension/AuroraCallBroadcast.entitlements
+        SKIP_INSTALL: YES
