@@ -32,9 +32,20 @@ function makeIcon(name) {
 
 function setIcon(button, name) {
   if (!button) return;
-  const current = button.querySelector(`[data-nav-icon="${name}"]`);
-  if (current && button.children.length === 1) return;
+  const icon = button.querySelector(`[data-nav-icon="${name}"]`);
+  if (icon && button.querySelectorAll("svg").length === 1) return;
   button.replaceChildren(makeIcon(name));
+}
+
+function normalizeChatButton(nav) {
+  const buttons = [...nav.querySelectorAll("[data-chat-open]")];
+  if (!buttons.length) return;
+  const primary = buttons[0];
+  buttons.slice(1).forEach((button) => button.remove());
+  const badge = primary.querySelector(".chat-nav-badge");
+  primary.querySelectorAll("svg").forEach((icon) => icon.remove());
+  primary.prepend(makeIcon("chat"));
+  if (badge) primary.append(badge);
 }
 
 let polishing = false;
@@ -49,13 +60,7 @@ function polish() {
     setIcon(nav.querySelector('[data-nav="history"]'), "history");
     setIcon(nav.querySelector('[data-nav="friends"]'), "friends");
     setIcon(nav.querySelector('[data-nav="settings"]'), "settings");
-
-    const chat = nav.querySelector("[data-chat-open]");
-    if (chat && !chat.querySelector('[data-nav-icon="chat"]')) {
-      const badge = chat.querySelector(".chat-nav-badge");
-      chat.prepend(makeIcon("chat"));
-      if (badge) chat.append(badge);
-    }
+    normalizeChatButton(nav);
   } finally {
     polishing = false;
   }
