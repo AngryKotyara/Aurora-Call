@@ -12,25 +12,367 @@ const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
 function icon(name) {
   const paths = {
     chat: '<path d="M4 5.5A3.5 3.5 0 0 1 7.5 2h9A3.5 3.5 0 0 1 20 5.5v6a3.5 3.5 0 0 1-3.5 3.5H10l-5 4v-4.6A3.5 3.5 0 0 1 4 12z"/>',
-    back: '<path d="m15 18-6-6 6-6"/>', attach: '<path d="M8.5 12.5 14 7a3 3 0 0 1 4.2 4.2l-7.1 7.1a5 5 0 0 1-7.1-7.1l7.2-7.2"/>',
-    send: '<path d="m3 11 17-8-7.5 18-2-7.5zM10.5 13.5 20 3"/>', close: '<path d="m6 6 12 12M18 6 6 18"/>',
+    back: '<path d="m15 18-6-6 6-6"/>',
+    attach: '<path d="M8.5 12.5 14 7a3 3 0 0 1 4.2 4.2l-7.1 7.1a5 5 0 0 1-7.1-7.1l7.2-7.2"/>',
+    send: '<path d="m3 11 17-8-7.5 18-2-7.5zM10.5 13.5 20 3"/>',
+    close: '<path d="m6 6 12 12M18 6 6 18"/>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
 }
-function ensureShell(){const nav=document.querySelector(".nav");if(nav&&!nav.querySelector("[data-chat-open]")){nav.insertAdjacentHTML("beforeend",`<button data-chat-open aria-label="Чаты" title="Чаты">${icon("chat")}<span class="chat-nav-badge" hidden></span></button>`);nav.querySelector("[data-chat-open]").addEventListener("click",()=>openChat());}if(!document.querySelector("#chat-layer"))document.body.insertAdjacentHTML("beforeend",'<div id="chat-layer" class="chat-layer" hidden></div>');}
-function formatTime(v){return v?new Intl.DateTimeFormat("ru",{hour:"2-digit",minute:"2-digit"}).format(new Date(v)):""}function formatThreadTime(v){if(!v)return"";const d=new Date(v),n=new Date();return d.toDateString()===n.toDateString()?formatTime(v):new Intl.DateTimeFormat("ru",{day:"2-digit",month:"2-digit"}).format(d)}
-async function getThreads(){return state.session?rpc("list_chat_threads",{p_token:state.session.token}).catch(()=>[]):[]}
-function threadRow(t){const i=escapeHtml(t.username?.[0]?.toUpperCase()||"?"),p=escapeHtml(t.last_message||"Начните переписку"),u=Number(t.unread_count||0);return `<button class="chat-thread" data-chat-friend="${escapeHtml(t.friend_id)}" data-chat-name="${escapeHtml(t.username)}"><span class="chat-avatar">${i}</span><span class="chat-thread-main"><span class="chat-thread-top"><b>${escapeHtml(t.username)}</b><time>${formatThreadTime(t.last_at)}</time></span><span class="chat-thread-bottom"><span>${p}</span>${u?`<strong class="chat-unread">${u>99?"99+":u}</strong>`:""}</span></span></button>`}
-async function openChat(friend=null){ensureShell();const l=document.querySelector("#chat-layer");l.hidden=false;document.body.classList.add("chat-active");if(friend)openedFriend=friend;openedFriend?await renderConversation():await renderThreads()}
-function closeChat(){openedFriend=null;const l=document.querySelector("#chat-layer");if(l)l.hidden=true;document.body.classList.remove("chat-active")}
-async function renderThreads(){const l=document.querySelector("#chat-layer");if(!l)return;const ts=await getThreads();l.innerHTML=`<section class="chat-shell chat-list-view"><header class="chat-topbar"><div><span class="chat-kicker">Aurora Call</span><h1>Чаты</h1></div><button class="chat-icon-btn" data-chat-close aria-label="Закрыть">${icon("close")}</button></header><div class="chat-search-wrap"><input class="chat-search" type="search" placeholder="Поиск"></div><div class="chat-thread-list">${ts.length?ts.map(threadRow).join(""):'<div class="chat-empty"><span>💬</span><b>Сообщений пока нет</b><p>Выберите друга и начните переписку.</p></div>'}</div></section>`;l.querySelector("[data-chat-close]").onclick=closeChat;l.querySelector(".chat-search").oninput=e=>{const q=e.target.value.toLowerCase().trim();l.querySelectorAll(".chat-thread").forEach(r=>r.hidden=!r.dataset.chatName.toLowerCase().includes(q))};l.querySelectorAll("[data-chat-friend]").forEach(r=>r.onclick=()=>openChat({id:r.dataset.chatFriend,name:r.dataset.chatName}))}
-function mediaUrl(m){if(!m.media_data)return"";if(m.media_data.startsWith("data:")||m.media_data.startsWith("http"))return m.media_data;return "https://taqpirplpmjihmkztwlv.supabase.co"+m.media_data}
-function messageMarkup(m){const incoming=m.sender_id===openedFriend?.id,b=m.body?`<div class="chat-message-text">${escapeHtml(m.body)}</div>`:"",src=mediaUrl(m);let media="";if(m.kind==="image"&&src)media=`<button class="chat-media-open" data-media-src="${escapeHtml(src)}" data-media-type="image"><img src="${escapeHtml(src)}" alt="${escapeHtml(m.media_name||"Фото")}" loading="lazy"></button>`;if(m.kind==="video"&&src)media=`<video class="chat-video" src="${escapeHtml(src)}" controls playsinline preload="metadata"></video>`;return `<article class="chat-bubble ${incoming?"incoming":"outgoing"}">${media}${b}<div class="chat-message-meta"><time>${formatTime(m.created_at)}</time>${incoming?"":`<span class="chat-checks ${m.read_at?"read":""}">✓✓</span>`}</div></article>`}
-async function loadMessages(){if(!openedFriend||!state.session)return[];const r=await rpc("list_chat_messages",{p_token:state.session.token,p_friend:openedFriend.id,p_before:null,p_limit:80}).catch(()=>[]);return r.reverse()}
-async function renderConversation(){const l=document.querySelector("#chat-layer");if(!l||!openedFriend)return;const ms=await loadMessages();l.innerHTML=`<section class="chat-shell chat-conversation-view"><header class="chat-conversation-header"><button class="chat-icon-btn" data-chat-back>${icon("back")}</button><span class="chat-avatar small">${escapeHtml(openedFriend.name?.[0]?.toUpperCase()||"?")}</span><div class="chat-peer"><b>${escapeHtml(openedFriend.name)}</b><span>личный чат</span></div><div class="chat-header-actions"><button class="chat-call-shortcut" data-chat-call="audio">☎</button><button class="chat-call-shortcut" data-chat-call="video">▣</button></div></header><div class="chat-messages">${ms.length?ms.map(messageMarkup).join(""):'<div class="chat-empty-conversation">Напишите первое сообщение</div>'}</div><form class="chat-composer"><input class="chat-file" type="file" accept="image/*,video/*" hidden><button type="button" class="chat-icon-btn attach" data-chat-attach>${icon("attach")}</button><textarea class="chat-input" rows="1" maxlength="4000" placeholder="Сообщение"></textarea><button class="chat-send">${icon("send")}</button></form></section>`;const me=l.querySelector(".chat-messages");requestAnimationFrame(()=>me.scrollTop=me.scrollHeight);l.querySelector("[data-chat-back]").onclick=()=>{openedFriend=null;void renderThreads()};l.querySelector("[data-chat-attach]").onclick=()=>l.querySelector(".chat-file").click();l.querySelector(".chat-file").onchange=e=>void sendMedia(e.target.files?.[0]);l.querySelector(".chat-composer").onsubmit=e=>{e.preventDefault();void sendText()};const inp=l.querySelector(".chat-input");inp.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void sendText()}};l.querySelectorAll("[data-chat-call]").forEach(b=>b.onclick=()=>{state.selectedFriend={id:openedFriend.id,name:openedFriend.name};document.dispatchEvent(new CustomEvent("aurora-chat-call",{detail:{mode:b.dataset.chatCall}}))});l.querySelectorAll("[data-media-type=image]").forEach(b=>b.onclick=()=>showMediaViewer(b.dataset.mediaSrc))}
-async function sendText(){const i=document.querySelector(".chat-input"),t=i?.value.trim();if(!t||!openedFriend)return;i.value="";try{await rpc("send_chat_message",{p_token:state.session.token,p_to:openedFriend.id,p_kind:"text",p_body:t,p_media_data:null,p_media_mime:null,p_media_name:null});await renderConversation()}catch{showToast("Не удалось отправить сообщение")}}
-function fileToBase64(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(",")[1]);r.onerror=reject;r.readAsDataURL(file)})}
-async function sendMedia(file){if(!file||!openedFriend)return;if(!/^image\//.test(file.type)&&!/^video\//.test(file.type))return showToast("Можно отправлять фото и видео");if(file.size>MAX_MEDIA_BYTES)return showToast("Файл слишком большой. Максимум 100 МБ");const c=document.querySelector(".chat-composer");c?.classList.add("is-uploading");try{const base64=await fileToBase64(file);await rpc("upload_chat_media",{p_token:state.session.token,p_to:openedFriend.id,p_kind:file.type.startsWith("image/")?"image":"video",p_body:null,p_media_mime:file.type,p_media_name:file.name,p_media_base64:base64});await renderConversation()}catch(e){console.error(e);showToast("Не удалось отправить файл")}finally{c?.classList.remove("is-uploading")}}
-function showMediaViewer(src){document.body.insertAdjacentHTML("beforeend",`<div class="chat-viewer"><button class="chat-viewer-close">${icon("close")}</button><img src="${escapeHtml(src)}" alt="Просмотр фото"></div>`);const v=document.querySelector(".chat-viewer:last-of-type");v.onclick=e=>{if(e.target===v||e.target.closest(".chat-viewer-close"))v.remove()}}
-async function refreshBadge(){if(!state.session)return;const ts=await getThreads(),total=ts.reduce((s,t)=>s+Number(t.unread_count||0),0),b=document.querySelector(".chat-nav-badge");if(b){b.hidden=!total;b.textContent=total>99?"99+":String(total)}const sig=ts.map(t=>`${t.friend_id}:${t.last_at}:${t.unread_count}`).join("|");if(lastThreadSignature&&sig!==lastThreadSignature&&openedFriend&&!document.querySelector("#chat-layer")?.hidden)await renderConversation();lastThreadSignature=sig}
-export function initChat(){ensureShell();observer=new MutationObserver(ensureShell);observer.observe(document.getElementById("root"),{childList:true,subtree:true});document.addEventListener("aurora-chat-open",e=>void openChat(e.detail||null));pollTimer=window.setInterval(()=>void refreshBadge(),2200);void refreshBadge()}
+
+function addMessageButton(container, friend) {
+  if (!container || container.querySelector("[data-message-friend]")) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "message-friend";
+  button.dataset.messageFriend = friend.id;
+  button.setAttribute("aria-label", `Написать ${friend.name}`);
+  button.title = `Написать ${friend.name}`;
+  button.innerHTML = `${icon("chat")}<span>Сообщение</span>`;
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void openChat(friend);
+  });
+
+  const firstCallButton = container.querySelector("[data-call]");
+  const deleteButton = container.querySelector("[data-delete-friend]");
+  container.insertBefore(button, firstCallButton || deleteButton || null);
+}
+
+function ensureFriendMessageActions() {
+  document.querySelectorAll(".card[data-select]").forEach((card) => {
+    addMessageButton(card, {
+      id: card.dataset.select,
+      name: card.dataset.name,
+    });
+  });
+
+  document.querySelectorAll(".friend-row").forEach((row) => {
+    const deleteButton = row.querySelector("[data-delete-friend]");
+    if (!deleteButton) return;
+    addMessageButton(row, {
+      id: deleteButton.dataset.deleteFriend,
+      name: deleteButton.dataset.name,
+    });
+  });
+}
+
+function ensureShell() {
+  const nav = document.querySelector(".nav");
+  if (nav && !nav.querySelector("[data-chat-open]")) {
+    nav.insertAdjacentHTML(
+      "beforeend",
+      `<button data-chat-open aria-label="Чаты" title="Чаты">${icon("chat")}<span class="chat-nav-badge" hidden></span></button>`,
+    );
+    nav.querySelector("[data-chat-open]").addEventListener("click", () => openChat());
+  }
+  if (!document.querySelector("#chat-layer")) {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<div id="chat-layer" class="chat-layer" hidden></div>',
+    );
+  }
+  ensureFriendMessageActions();
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("ru", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatThreadTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return formatTime(value);
+  return new Intl.DateTimeFormat("ru", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+}
+
+async function getThreads() {
+  if (!state.session) return [];
+  return rpc("list_chat_threads", { p_token: state.session.token }).catch(() => []);
+}
+
+function threadRow(thread) {
+  const initial = escapeHtml(thread.username?.[0]?.toUpperCase() || "?");
+  const preview = escapeHtml(thread.last_message || "Начните переписку");
+  const unread = Number(thread.unread_count || 0);
+  return `<button class="chat-thread" data-chat-friend="${escapeHtml(thread.friend_id)}" data-chat-name="${escapeHtml(thread.username)}">
+    <span class="chat-avatar">${initial}</span>
+    <span class="chat-thread-main">
+      <span class="chat-thread-top"><b>${escapeHtml(thread.username)}</b><time>${formatThreadTime(thread.last_at)}</time></span>
+      <span class="chat-thread-bottom"><span>${preview}</span>${unread ? `<strong class="chat-unread">${unread > 99 ? "99+" : unread}</strong>` : ""}</span>
+    </span>
+  </button>`;
+}
+
+async function openChat(friend = null) {
+  ensureShell();
+  const layer = document.querySelector("#chat-layer");
+  layer.hidden = false;
+  document.body.classList.add("chat-active");
+  if (friend) openedFriend = friend;
+  if (openedFriend) await renderConversation();
+  else await renderThreads();
+}
+
+function closeChat() {
+  openedFriend = null;
+  const layer = document.querySelector("#chat-layer");
+  if (layer) layer.hidden = true;
+  document.body.classList.remove("chat-active");
+}
+
+async function renderThreads() {
+  const layer = document.querySelector("#chat-layer");
+  if (!layer) return;
+  const threads = await getThreads();
+  layer.innerHTML = `<section class="chat-shell chat-list-view">
+    <header class="chat-topbar"><div><span class="chat-kicker">Aurora Call</span><h1>Чаты</h1></div><button class="chat-icon-btn" data-chat-close aria-label="Закрыть">${icon("close")}</button></header>
+    <div class="chat-search-wrap"><input class="chat-search" type="search" placeholder="Поиск" aria-label="Поиск по чатам"></div>
+    <div class="chat-thread-list">${threads.length ? threads.map(threadRow).join("") : '<div class="chat-empty"><span>💬</span><b>Сообщений пока нет</b><p>Откройте друга и нажмите «Сообщение».</p></div>'}</div>
+  </section>`;
+  layer.querySelector("[data-chat-close]").addEventListener("click", closeChat);
+  layer.querySelector(".chat-search").addEventListener("input", (event) => {
+    const q = event.target.value.toLowerCase().trim();
+    layer.querySelectorAll(".chat-thread").forEach((row) => {
+      row.hidden = !row.dataset.chatName.toLowerCase().includes(q);
+    });
+  });
+  layer.querySelectorAll("[data-chat-friend]").forEach((row) => {
+    row.addEventListener("click", () =>
+      openChat({ id: row.dataset.chatFriend, name: row.dataset.chatName }),
+    );
+  });
+}
+
+function mediaUrl(message) {
+  if (!message.media_data) return "";
+  if (message.media_data.startsWith("data:") || message.media_data.startsWith("http")) {
+    return message.media_data;
+  }
+  return `https://taqpirplpmjihmkztwlv.supabase.co${message.media_data}`;
+}
+
+function messageMarkup(message) {
+  const incoming = message.sender_id === openedFriend?.id;
+  const body = message.body
+    ? `<div class="chat-message-text">${escapeHtml(message.body)}</div>`
+    : "";
+  const src = mediaUrl(message);
+  let media = "";
+  if (message.kind === "image" && src) {
+    media = `<button class="chat-media-open" data-media-src="${escapeHtml(src)}" data-media-type="image"><img src="${escapeHtml(src)}" alt="${escapeHtml(message.media_name || "Фото")}" loading="lazy"></button>`;
+  }
+  if (message.kind === "video" && src) {
+    media = `<video class="chat-video" src="${escapeHtml(src)}" controls playsinline preload="metadata"></video>`;
+  }
+  return `<article class="chat-bubble ${incoming ? "incoming" : "outgoing"}">${media}${body}<div class="chat-message-meta"><time>${formatTime(message.created_at)}</time>${incoming ? "" : `<span class="chat-checks ${message.read_at ? "read" : ""}">✓✓</span>`}</div></article>`;
+}
+
+async function loadMessages() {
+  if (!openedFriend || !state.session) return [];
+  try {
+    const rows = await rpc("list_chat_messages", {
+      p_token: state.session.token,
+      p_friend: openedFriend.id,
+      p_before: null,
+      p_limit: 80,
+    });
+    return rows.reverse();
+  } catch (error) {
+    console.error("Failed to load chat messages", error);
+    showToast("Не удалось загрузить сообщения");
+    return [];
+  }
+}
+
+async function renderConversation() {
+  const layer = document.querySelector("#chat-layer");
+  if (!layer || !openedFriend) return;
+  const messages = await loadMessages();
+  layer.innerHTML = `<section class="chat-shell chat-conversation-view">
+    <header class="chat-conversation-header"><button class="chat-icon-btn" data-chat-back aria-label="Назад">${icon("back")}</button><span class="chat-avatar small">${escapeHtml(openedFriend.name?.[0]?.toUpperCase() || "?")}</span><div class="chat-peer"><b>${escapeHtml(openedFriend.name)}</b><span>личный чат</span></div><div class="chat-header-actions"><button class="chat-call-shortcut" data-chat-call="audio" title="Аудиозвонок">☎</button><button class="chat-call-shortcut" data-chat-call="video" title="Видеозвонок">▣</button></div></header>
+    <div class="chat-messages">${messages.length ? messages.map(messageMarkup).join("") : '<div class="chat-empty-conversation">Напишите первое сообщение</div>'}</div>
+    <form class="chat-composer"><input class="chat-file" type="file" accept="image/*,video/*" hidden><button type="button" class="chat-icon-btn attach" data-chat-attach aria-label="Прикрепить фото или видео">${icon("attach")}</button><textarea class="chat-input" rows="1" maxlength="4000" placeholder="Сообщение" aria-label="Сообщение"></textarea><button class="chat-send" aria-label="Отправить">${icon("send")}</button></form>
+  </section>`;
+
+  const messagesEl = layer.querySelector(".chat-messages");
+  requestAnimationFrame(() => {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  });
+  layer.querySelector("[data-chat-back]").addEventListener("click", () => {
+    openedFriend = null;
+    void renderThreads();
+  });
+  layer.querySelector("[data-chat-attach]").addEventListener("click", () =>
+    layer.querySelector(".chat-file").click(),
+  );
+  layer.querySelector(".chat-file").addEventListener("change", (event) =>
+    void sendMedia(event.target.files?.[0]),
+  );
+  layer.querySelector(".chat-composer").addEventListener("submit", (event) => {
+    event.preventDefault();
+    void sendText();
+  });
+  const input = layer.querySelector(".chat-input");
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void sendText();
+    }
+  });
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+  });
+  layer.querySelectorAll("[data-chat-call]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFriend = { id: openedFriend.id, name: openedFriend.name };
+      document.dispatchEvent(
+        new CustomEvent("aurora-chat-call", {
+          detail: { mode: button.dataset.chatCall },
+        }),
+      );
+    });
+  });
+  layer.querySelectorAll("[data-media-type=image]").forEach((button) => {
+    button.addEventListener("click", () => showMediaViewer(button.dataset.mediaSrc));
+  });
+}
+
+async function sendText() {
+  const input = document.querySelector(".chat-input");
+  const text = input?.value.trim();
+  if (!text || !openedFriend) return;
+
+  input.value = "";
+  input.style.height = "auto";
+  const messagesEl = document.querySelector(".chat-messages");
+  const empty = messagesEl?.querySelector(".chat-empty-conversation");
+  empty?.remove();
+  const optimistic = document.createElement("article");
+  optimistic.className = "chat-bubble outgoing is-sending";
+  optimistic.innerHTML = `<div class="chat-message-text">${escapeHtml(text)}</div><div class="chat-message-meta"><span>Отправка…</span></div>`;
+  messagesEl?.append(optimistic);
+  if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  try {
+    await rpc("send_chat_message", {
+      p_token: state.session.token,
+      p_to: openedFriend.id,
+      p_kind: "text",
+      p_body: text,
+      p_media_data: null,
+      p_media_mime: null,
+      p_media_name: null,
+    });
+    await renderConversation();
+  } catch (error) {
+    optimistic.remove();
+    input.value = text;
+    console.error("Failed to send chat message", error);
+    showToast("Не удалось отправить сообщение");
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sendMedia(file) {
+  if (!file || !openedFriend) return;
+  if (!/^image\//.test(file.type) && !/^video\//.test(file.type)) {
+    showToast("Можно отправлять фото и видео");
+    return;
+  }
+  if (file.size > MAX_MEDIA_BYTES) {
+    showToast("Файл слишком большой. Максимум 100 МБ");
+    return;
+  }
+  const composer = document.querySelector(".chat-composer");
+  composer?.classList.add("is-uploading");
+  try {
+    const base64 = await fileToBase64(file);
+    await rpc("upload_chat_media", {
+      p_token: state.session.token,
+      p_to: openedFriend.id,
+      p_kind: file.type.startsWith("image/") ? "image" : "video",
+      p_body: null,
+      p_media_mime: file.type,
+      p_media_name: file.name,
+      p_media_base64: base64,
+    });
+    await renderConversation();
+  } catch (error) {
+    console.error("Failed to send chat media", error);
+    showToast("Не удалось отправить файл");
+  } finally {
+    composer?.classList.remove("is-uploading");
+  }
+}
+
+function showMediaViewer(src) {
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `<div class="chat-viewer"><button class="chat-viewer-close">${icon("close")}</button><img src="${escapeHtml(src)}" alt="Просмотр фото"></div>`,
+  );
+  const viewer = document.querySelector(".chat-viewer:last-of-type");
+  viewer.addEventListener("click", (event) => {
+    if (event.target === viewer || event.target.closest(".chat-viewer-close")) {
+      viewer.remove();
+    }
+  });
+}
+
+async function refreshBadge() {
+  if (!state.session) return;
+  const threads = await getThreads();
+  const total = threads.reduce(
+    (sum, thread) => sum + Number(thread.unread_count || 0),
+    0,
+  );
+  const badge = document.querySelector(".chat-nav-badge");
+  if (badge) {
+    badge.hidden = !total;
+    badge.textContent = total > 99 ? "99+" : String(total);
+  }
+  const signature = threads
+    .map((thread) => `${thread.friend_id}:${thread.last_at}:${thread.unread_count}`)
+    .join("|");
+  if (
+    lastThreadSignature &&
+    signature !== lastThreadSignature &&
+    openedFriend &&
+    !document.querySelector("#chat-layer")?.hidden
+  ) {
+    await renderConversation();
+  }
+  lastThreadSignature = signature;
+}
+
+export function initChat() {
+  ensureShell();
+  observer = new MutationObserver(ensureShell);
+  observer.observe(document.getElementById("root"), {
+    childList: true,
+    subtree: true,
+  });
+  document.addEventListener("aurora-chat-open", (event) =>
+    void openChat(event.detail || null),
+  );
+  pollTimer = window.setInterval(() => void refreshBadge(), 2200);
+  void refreshBadge();
+}
