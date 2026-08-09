@@ -4,6 +4,7 @@ let stream = null;
 let firstFrameResolve = null;
 let firstFrameReject = null;
 let firstFrameTimer = null;
+const nativeStreams = new WeakSet();
 
 function bridge() {
   return window.webkit?.messageHandlers?.auroraScreenShare || null;
@@ -16,17 +17,29 @@ function clearFirstFrameWait() {
   firstFrameReject = null;
 }
 
-function destroyCanvasStream() {
+function destroyCanvasStream({ emitEnded = false } = {}) {
+  const currentStream = stream;
   clearFirstFrameWait();
-  stream?.getTracks().forEach((track) => track.stop());
+  currentStream?.getTracks().forEach((track) => track.stop());
   stream = null;
   canvas?.remove();
   canvas = null;
   context = null;
+
+  if (emitEnded && currentStream)
+    window.dispatchEvent(
+      new CustomEvent("aurora-native-screen-share-ended", {
+        detail: { stream: currentStream },
+      }),
+    );
 }
 
 export function isIOSNativeScreenShareAvailable() {
   return Boolean(bridge() && HTMLCanvasElement.prototype.captureStream);
+}
+
+export function isIOSScreenStream(candidate) {
+  return Boolean(candidate && nativeStreams.has(candidate));
 }
 
 export async function createIOSScreenStream() {
@@ -46,6 +59,7 @@ export async function createIOSScreenStream() {
   document.body.appendChild(canvas);
   context = canvas.getContext("2d", { alpha: false });
   stream = canvas.captureStream(12);
+  nativeStreams.add(stream);
 
   const firstFrame = new Promise((resolve, reject) => {
     firstFrameResolve = resolve;
@@ -82,7 +96,12 @@ export async function createIOSScreenStream() {
   };
 
   window.__auroraNativeScreenShareState = (status) => {
-    if (status === "stopped" || status === "failed") destroyCanvasStream();
+    if (status === "failed") {
+      firstFrameReject?.(new Error("ReplayKit failed"));
+      destroyCanvasStream({ emitEnded: true });
+    } else if (status === "stopped") {
+      destroyCanvasStream({ emitEnded: true });
+    }
   };
 
   nativeBridge.postMessage({ action: "start" });
