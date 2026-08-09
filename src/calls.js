@@ -1,5 +1,11 @@
 import { rpc } from "./api.js";
 import { config } from "./config.js";
+import {
+  createIOSScreenStream,
+  isIOSNativeScreenShareAvailable,
+  isIOSScreenStream,
+  stopIOSScreenShare,
+} from "./ios-screen-share.js";
 import { clearMediaPermissionRecord } from "./media-permissions.js";
 import { state } from "./state.js";
 import {
@@ -36,6 +42,7 @@ function sendScreenShareState(active) {
 async function stopScreenShare({
   restoreCamera = true,
   notifyPeer = true,
+  requestNativeStop = true,
 } = {}) {
   const screenStream = detachScreenStream();
 
@@ -44,6 +51,7 @@ async function stopScreenShare({
     return false;
   }
 
+  const nativeScreenShare = isIOSScreenStream(screenStream);
   const cameraTrack = state.mediaStream?.getVideoTracks()[0] || null;
 
   if (restoreCamera && state.videoSender && cameraTrack) {
@@ -54,6 +62,7 @@ async function stopScreenShare({
     }
   }
 
+  if (nativeScreenShare && requestNativeStop) stopIOSScreenShare();
   screenStream.getTracks().forEach((track) => track.stop());
   setScreenShareActive(false);
   if (notifyPeer) void sendScreenShareState(false);
@@ -75,6 +84,11 @@ function watchScreenTrack(track) {
     if (track.onended === handleEnded) track.onended = null;
   };
 }
+
+window.addEventListener("aurora-native-screen-share-ended", (event) => {
+  if (state.screenStream && event.detail?.stream === state.screenStream)
+    void stopScreenShare({ requestNativeStop: false });
+});
 
 function stopLocalCall() {
   void stopScreenShare({ restoreCamera: false, notifyPeer: false });
@@ -144,17 +158,19 @@ export async function toggleScreenShare() {
     return false;
   }
 
-  if (!getDisplayMedia) {
-    showToast(
-      "Этот браузер не поддерживает захват экрана. Попробуйте открыть Aurora Call в Chrome или Edge на компьютере.",
-    );
-    return false;
-  }
-
   let screenStream;
 
   try {
-    screenStream = await getDisplayMedia({ video: true, audio: false });
+    if (isIOSNativeScreenShareAvailable()) {
+      screenStream = await createIOSScreenStream();
+    } else if (getDisplayMedia) {
+      screenStream = await getDisplayMedia({ video: true, audio: false });
+    } else {
+      showToast(
+        "На iPhone демонстрация всего экрана доступна в приложении Aurora Call. В браузере используйте поддерживаемый системный захват экрана.",
+      );
+      return false;
+    }
   } catch (error) {
     showToast(
       error?.name === "NotAllowedError" || error?.name === "AbortError"
@@ -172,6 +188,7 @@ export async function toggleScreenShare() {
     state.callId !== callId ||
     state.videoSender !== videoSender
   ) {
+    if (isIOSScreenStream(screenStream)) stopIOSScreenShare();
     screenStream.getTracks().forEach((track) => track.stop());
     showToast("Не удалось получить изображение экрана");
     return false;
@@ -181,6 +198,7 @@ export async function toggleScreenShare() {
     screenTrack.contentHint = "detail";
     await videoSender.replaceTrack(screenTrack);
   } catch {
+    if (isIOSScreenStream(screenStream)) stopIOSScreenShare();
     screenStream.getTracks().forEach((track) => track.stop());
     showToast("Не удалось передать изображение экрана");
     return false;
@@ -191,6 +209,7 @@ export async function toggleScreenShare() {
     state.callId !== callId ||
     state.videoSender !== videoSender
   ) {
+    if (isIOSScreenStream(screenStream)) stopIOSScreenShare();
     screenStream.getTracks().forEach((track) => track.stop());
     return false;
   }
