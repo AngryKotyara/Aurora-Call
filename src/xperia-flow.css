@@ -1,0 +1,16 @@
+.home-hero{background:radial-gradient(ellipse at 42% 5%,#243b68 0%,#101a35 34%,#090b18 69%,#05060b 100%);}
+.home-hero::after{background:linear-gradient(180deg,#17254b12 0%,transparent 36%,#05060b9c 100%);}
+.xperia-flow{position:absolute;z-index:1;inset:0;overflow:hidden;pointer-events:none;filter:drop-shadow(0 0 12px #8d66ff38);}
+.xperia-flow::before{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 52%,#854cff18,transparent 44%),radial-gradient(ellipse at 22% 45%,#258dff16,transparent 34%);content:"";animation:xf-ambient 8s ease-in-out infinite alternate;}
+.xperia-flow svg{position:absolute;left:-12%;bottom:-3%;width:124%;height:69%;overflow:visible;transform:rotate(-1.5deg);}
+.xf-ribbon,.xf-highlight{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;transform-box:fill-box;transform-origin:center;}
+.xf-ribbon-a{stroke:#8b5cff;stroke-width:25;opacity:.22;filter:blur(8px);animation:xf-flow-a 9s ease-in-out infinite alternate;}
+.xf-ribbon-b{stroke:#42a7ff;stroke-width:15;opacity:.28;filter:blur(5px);animation:xf-flow-b 11s ease-in-out infinite alternate;}
+.xf-ribbon-c{stroke:#d45aff;stroke-width:9;opacity:.20;filter:blur(4px);animation:xf-flow-c 13s ease-in-out infinite alternate;}
+.xf-highlight{stroke:#d8eaff;stroke-width:2.4;opacity:.86;filter:drop-shadow(0 0 5px #62baff) drop-shadow(0 0 9px #a95cff);animation:xf-highlight 7s ease-in-out infinite alternate;}
+@keyframes xf-flow-a{0%{transform:translate3d(-28px,12px,0) scaleY(.82)}48%{transform:translate3d(14px,-8px,0) scaleY(1.13)}100%{transform:translate3d(42px,8px,0) scaleY(.9)}}
+@keyframes xf-flow-b{0%{transform:translate3d(34px,-7px,0) scaleY(1.08)}55%{transform:translate3d(-10px,12px,0) scaleY(.82)}100%{transform:translate3d(-38px,-3px,0) scaleY(1.12)}}
+@keyframes xf-flow-c{0%{transform:translate3d(-12px,-13px,0) scaleY(.9)}50%{transform:translate3d(31px,8px,0) scaleY(1.16)}100%{transform:translate3d(-3px,15px,0) scaleY(.86)}}
+@keyframes xf-highlight{0%{transform:translate3d(-20px,3px,0) scaleY(.9);opacity:.55}50%{transform:translate3d(8px,-6px,0) scaleY(1.08);opacity:.96}100%{transform:translate3d(30px,5px,0) scaleY(.94);opacity:.68}}
+@keyframes xf-ambient{from{opacity:.55;transform:scale(1)}to{opacity:1;transform:scale(1.04)}}
+@media(prefers-reduced-motion:reduce){.xperia-flow::before,.xf-ribbon,.xf-highlight{animation:none!important}}
