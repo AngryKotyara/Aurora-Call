@@ -1,7 +1,9 @@
 import { state } from "./state.js";
 
 let activeBubble = null;
-let excludedTargetTimer = null;
+let longPressTimer = null;
+let startX = 0;
+let startY = 0;
 
 function positionMenu(menu) {
   const bubble = activeBubble;
@@ -18,40 +20,40 @@ function positionMenu(menu) {
   menu.style.transformOrigin = top >= rect.bottom ? "top right" : "bottom right";
 }
 
-function rememberBubble(event) {
+function cancelLongPress() {
+  clearTimeout(longPressTimer);
+  longPressTimer = null;
+}
+
+function beginLongPress(event) {
   const bubble = event.target.closest?.("#chat-layer .chat-bubble[data-message-own=true]");
   if (!bubble) return;
+
+  // Prevent the older per-bubble pointer handler from starting a second timer.
+  event.stopPropagation();
   activeBubble = bubble;
+  startX = event.clientX;
+  startY = event.clientY;
+  cancelLongPress();
 
-  clearTimeout(excludedTargetTimer);
-  if (event.target.closest("video,a,button")) {
-    const x = event.clientX;
-    const y = event.clientY;
-    excludedTargetTimer = window.setTimeout(() => {
-      if (!bubble.isConnected) return;
-      navigator.vibrate?.(14);
-      bubble.dispatchEvent(new MouseEvent("contextmenu", {
-        bubbles: true,
-        cancelable: true,
-        clientX: x,
-        clientY: y,
-      }));
-    }, 420);
-  }
+  longPressTimer = window.setTimeout(() => {
+    if (!bubble.isConnected) return;
+    navigator.vibrate?.(14);
+    bubble.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: startX,
+      clientY: startY,
+    }));
+  }, 420);
 }
 
-function cancelExcludedLongPress() {
-  clearTimeout(excludedTargetTimer);
-  excludedTargetTimer = null;
-}
-
-document.addEventListener("pointerdown", rememberBubble, { capture: true, passive: true });
-document.addEventListener("pointerup", cancelExcludedLongPress, { capture: true, passive: true });
-document.addEventListener("pointercancel", cancelExcludedLongPress, { capture: true, passive: true });
+document.addEventListener("pointerdown", beginLongPress, { capture: true });
+document.addEventListener("pointerup", cancelLongPress, { capture: true, passive: true });
+document.addEventListener("pointercancel", cancelLongPress, { capture: true, passive: true });
 document.addEventListener("pointermove", (event) => {
-  if (!excludedTargetTimer || !activeBubble) return;
-  const rect = activeBubble.getBoundingClientRect();
-  if (event.clientX < rect.left - 10 || event.clientX > rect.right + 10 || event.clientY < rect.top - 10 || event.clientY > rect.bottom + 10) cancelExcludedLongPress();
+  if (!longPressTimer) return;
+  if (Math.hypot(event.clientX - startX, event.clientY - startY) > 9) cancelLongPress();
 }, { capture: true, passive: true });
 
 const observer = new MutationObserver(() => {
@@ -62,7 +64,7 @@ observer.observe(document.documentElement, { childList: true, subtree: true });
 
 window.addEventListener("resize", () => positionMenu(document.querySelector(".chat-message-menu")), { passive: true });
 
-// Make destructive actions feel immediate while the existing RPC still performs the secure delete.
+// Make destructive actions feel immediate while the secure RPC completes in the background.
 document.addEventListener("click", (event) => {
   const deleteButton = event.target.closest?.("[data-message-delete]");
   if (!deleteButton || !activeBubble) return;
@@ -77,9 +79,6 @@ document.addEventListener("click", (event) => {
   });
 }, { capture: true });
 
-// Remove the historic 300 ms tap delay on mobile browsers and signal fast-touch intent.
 document.documentElement.style.touchAction = "manipulation";
 document.body.style.touchAction = "manipulation";
-
-// Warm the session object once so taps do not repeatedly parse it in hot paths.
 void state.session;
