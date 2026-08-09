@@ -74,14 +74,18 @@ async function sleep(ms) {
   if (ms) await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function signedTusHeaders(ticket, extra = {}) {
+  return {
+    "Tus-Resumable": "1.0.0",
+    "x-signature": ticket.signature,
+    ...extra,
+  };
+}
+
 async function headOffset(url, ticket) {
   const response = await fetch(url, {
     method: "HEAD",
-    headers: {
-      "Tus-Resumable": "1.0.0",
-      "x-signature": ticket.signature,
-      apikey: config.supabasePublishableKey,
-    },
+    headers: signedTusHeaders(ticket),
   });
   if (!response.ok) throw new Error(`head_${response.status}`);
   return Number(response.headers.get("Upload-Offset") || 0);
@@ -90,13 +94,10 @@ async function headOffset(url, ticket) {
 async function createTusUpload(file, ticket) {
   const response = await fetch(ticket.endpoint, {
     method: "POST",
-    headers: {
-      "Tus-Resumable": "1.0.0",
+    headers: signedTusHeaders(ticket, {
       "Upload-Length": String(file.size),
       "Upload-Metadata": metadata(ticket, file),
-      "x-signature": ticket.signature,
-      apikey: config.supabasePublishableKey,
-    },
+    }),
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
@@ -110,13 +111,10 @@ async function createTusUpload(file, ticket) {
 async function patchChunk(url, ticket, blob, offset) {
   const response = await fetch(url, {
     method: "PATCH",
-    headers: {
-      "Tus-Resumable": "1.0.0",
+    headers: signedTusHeaders(ticket, {
       "Upload-Offset": String(offset),
       "Content-Type": "application/offset+octet-stream",
-      "x-signature": ticket.signature,
-      apikey: config.supabasePublishableKey,
-    },
+    }),
     body: blob,
   });
   if (!response.ok) {
@@ -186,9 +184,6 @@ async function resumableUpload(file, friend, onProgress) {
     onProgress(Math.min(96, Math.max(1, Math.round((offset / file.size) * 96))));
   }
 
-  // Keep the resumable ticket until the chat message is successfully finalized.
-  // If finalization fails, choosing the same file again will HEAD the completed upload
-  // and only retry message creation instead of re-uploading the video.
   return { ticket, key };
 }
 
@@ -249,7 +244,9 @@ export async function handleResumableMedia(file) {
     showToast("Откройте чат с другом и попробуйте снова");
     return;
   }
-  if (!(file.type.startsWith("image/") || file.type.startsWith("video/"))) {
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/") || /\.(mov|mp4|m4v|webm)$/i.test(file.name || "");
+  if (!(isImage || isVideo)) {
     showToast("Можно отправлять фото и видео");
     return;
   }
@@ -274,7 +271,7 @@ export async function handleResumableMedia(file) {
     ui.article.classList.add("is-failed");
     const ring = ui.article.querySelector(".chat-upload-ring b");
     const current = Number.parseInt(ring?.textContent || "0", 10) || 0;
-    ui.update(current, current >= 96 ? "Не удалось сохранить сообщение — повторите файл" : "Ошибка загрузки — повторите файл");
+    ui.update(current, current >= 96 ? "Не удалось сохранить сообщение — повторите файл" : `Ошибка загрузки${error?.message ? ` (${String(error.message).slice(0, 32)})` : ""} — повторите файл`);
     showToast(current >= 96 ? "Видео загружено. Выберите тот же файл ещё раз — повторно загружать его не придётся." : "Не удалось отправить файл. Повторная попытка продолжит загрузку.");
   } finally {
     URL.revokeObjectURL(ui.preview);
@@ -285,8 +282,6 @@ function bindInput(input) {
   if (!(input instanceof HTMLInputElement) || !input.classList.contains("chat-file")) return;
   if (input.dataset.resumableBound === "true") return;
   input.dataset.resumableBound = "true";
-
-  // Replace the legacy property handler so video can never fall back to Base64/RPC.
   input.onchange = (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -301,7 +296,6 @@ function bindInputs() {
   document.querySelectorAll("input.chat-file").forEach(bindInput);
 }
 
-// Capture remains as an extra guard for older cached chat modules.
 document.addEventListener("change", (event) => {
   const input = event.target;
   if (!(input instanceof HTMLInputElement) || !input.classList.contains("chat-file")) return;
