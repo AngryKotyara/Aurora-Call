@@ -1,6 +1,7 @@
 import { rpc } from "./api.js";
 import { applyBranding } from "./branding.js";
 import { startCall, startSignalPolling } from "./calls.js";
+import { initChat } from "./chat.js";
 import {
   inspectMediaPermissions,
   requestMediaPermissions,
@@ -175,6 +176,11 @@ async function render(activeScreen = "home") {
 async function bootstrap() {
   await render();
   await acceptInviteFromUrl();
+  initChat();
+  document.addEventListener("aurora-chat-call", (event) => {
+    const mode = event.detail?.mode === "video" ? "video" : "audio";
+    void startCall(mode);
+  });
   startSignalPolling();
 }
 
