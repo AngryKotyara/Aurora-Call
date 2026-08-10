@@ -1,7 +1,7 @@
 .home-hero{background:radial-gradient(ellipse at 50% -10%,#38105e 0%,#170c35 32%,#0b0a20 64%,#05060d 100%);min-height:clamp(560px,72vh,760px);position:relative;}
 .home-hero::after{background:linear-gradient(180deg,#5d159514 0%,transparent 34%,#05060db8 100%);}
 .home-hero .home-copy{position:relative;z-index:3;height:100%;min-height:inherit;}
-.home-hero .hero-brand{position:absolute;top:34px;left:34px;z-index:4;}
+.home-hero .hero-brand{position:absolute;top:34px;left:50%;z-index:4;transform:translateX(-50%);justify-content:center;width:max-content;max-width:88%;text-align:center;}
 .home-hero .stay-in-touch-copy h1{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;width:max-content;max-width:90%;text-align:center;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Inter,Arial,sans-serif;font-size:clamp(44px,6.8vw,82px);font-weight:600;line-height:.96;letter-spacing:.095em;text-transform:uppercase;color:#fff;text-shadow:0 2px 14px #0008,0 0 22px #a95cff4a;-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision;}
 .xperia-flow{position:absolute;z-index:1;inset:0;overflow:hidden;pointer-events:none;isolation:isolate;contain:paint;}
 .xperia-flow::before{position:absolute;inset:-10%;content:"";background:radial-gradient(ellipse at 18% 48%,#ff3bd526 0%,transparent 38%),radial-gradient(ellipse at 82% 48%,#2f78ff26 0%,transparent 38%);opacity:.78;animation:ribbon-ambient 10s ease-in-out infinite alternate;}
@@ -11,9 +11,25 @@
 .aurora-ribbon-highlight,.aurora-ribbon-sheen{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;will-change:transform,opacity;}
 .aurora-ribbon-highlight{stroke:url(#auroraRibbonLight);stroke-width:4.2;opacity:.86;animation:ribbon-highlight 8.5s ease-in-out infinite alternate;}
 .aurora-ribbon-sheen{stroke:#ffb4ef;stroke-width:2.2;opacity:.38;animation:ribbon-sheen 9.5s ease-in-out infinite alternate;}
+.home-hero + .grid{gap:14px;margin-top:18px;}
+.home-hero + .grid .call{position:relative;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;min-height:112px;padding:18px;border:1px solid #6d92ff28;border-radius:26px;background:linear-gradient(145deg,#173c67 0%,#102740 52%,#0c1d33 100%);box-shadow:inset 0 1px 0 #ffffff12,0 12px 30px #0005;overflow:hidden;text-align:left;transition:transform .16s ease,filter .16s ease,border-color .16s ease,box-shadow .16s ease;}
+.home-hero + .grid .call::before{position:absolute;inset:0;background:radial-gradient(circle at 14% 18%,#4ba0ff26,transparent 42%);content:"";pointer-events:none;}
+.home-hero + .grid .call.video{border-color:#d955dd28;background:linear-gradient(145deg,#59245e 0%,#421943 52%,#2b102e 100%);}
+.home-hero + .grid .call.video::before{background:radial-gradient(circle at 14% 18%,#ff69dd26,transparent 42%);}
+.home-hero + .grid .call:active{transform:scale(.975);filter:brightness(1.08);}
+.home-hero + .grid .call:hover{border-color:#7da8ff66;box-shadow:inset 0 1px 0 #ffffff18,0 14px 36px #0006;}
+.home-hero + .grid .call.video:hover{border-color:#ec6ce466;}
+.home-call-icon{position:relative;z-index:1;display:grid;width:48px;height:48px;border:1px solid #8bb8ff38;border-radius:16px;background:linear-gradient(145deg,#265c91,#173b63);box-shadow:inset 0 1px 0 #ffffff1c,0 8px 18px #06111e88;place-items:center;}
+.video .home-call-icon{border-color:#ef86e438;background:linear-gradient(145deg,#7b347f,#512153);}
+.home-call-icon svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.home-call-copy{position:relative;z-index:1;display:flex;min-width:0;flex-direction:column;gap:4px;}
+.home-call-copy strong{font-size:16px;font-weight:850;letter-spacing:-.2px;color:#fff;white-space:nowrap;}
+.home-call-copy small{font-size:11px;font-weight:600;color:#aebcd0;white-space:nowrap;}
+.video .home-call-copy small{color:#c9aacb;}
+.home-call-arrow{position:relative;z-index:1;color:#ffffff7a;font-size:28px;font-weight:300;line-height:1;}
 @keyframes ribbon-float{0%{transform:translate3d(-34px,12px,0) scale3d(1.03,.96,1) rotate(-1deg)}50%{transform:translate3d(8px,-10px,0) scale3d(.99,1.04,1) rotate(.4deg)}100%{transform:translate3d(38px,8px,0) scale3d(1.02,.98,1) rotate(-.5deg)}}
 @keyframes ribbon-highlight{0%{transform:translate3d(-24px,6px,0) scaleY(.96);opacity:.66}50%{transform:translate3d(10px,-6px,0) scaleY(1.05);opacity:.95}100%{transform:translate3d(28px,5px,0) scaleY(.98);opacity:.76}}
 @keyframes ribbon-sheen{0%{transform:translate3d(18px,-4px,0) scaleY(1.03);opacity:.26}50%{transform:translate3d(-8px,7px,0) scaleY(.96);opacity:.46}100%{transform:translate3d(-26px,-3px,0) scaleY(1.04);opacity:.32}}
 @keyframes ribbon-ambient{from{opacity:.58;transform:translate3d(-1%,0,0) scale(1)}to{opacity:.88;transform:translate3d(1%,0,0) scale(1.03)}}
-@media(max-width:600px){.home-hero{min-height:620px}.home-hero .hero-brand{top:30px;left:26px}.home-hero .stay-in-touch-copy h1{font-size:clamp(36px,9.5vw,52px);max-width:92%;letter-spacing:.075em}.xperia-flow svg{inset:-4% -15%;width:130%;height:108%}.aurora-ribbon{opacity:.62;filter:drop-shadow(0 0 12px #8f4cff5c) drop-shadow(0 0 20px #416cff38)}.aurora-ribbon-highlight{stroke-width:3.2}.aurora-ribbon-sheen{stroke-width:1.6}.xperia-flow::before{opacity:.68}}
+@media(max-width:600px){.home-hero{min-height:620px}.home-hero .hero-brand{top:30px;left:50%;max-width:90%;transform:translateX(-50%)}.home-hero .stay-in-touch-copy h1{font-size:clamp(36px,9.5vw,52px);max-width:92%;letter-spacing:.075em}.xperia-flow svg{inset:-4% -15%;width:130%;height:108%}.aurora-ribbon{opacity:.62;filter:drop-shadow(0 0 12px #8f4cff5c) drop-shadow(0 0 20px #416cff38)}.aurora-ribbon-highlight{stroke-width:3.2}.aurora-ribbon-sheen{stroke-width:1.6}.xperia-flow::before{opacity:.68}.home-hero + .grid .call{min-height:104px;padding:15px 13px;gap:9px}.home-call-icon{width:42px;height:42px;border-radius:14px}.home-call-icon svg{width:21px;height:21px}.home-call-copy strong{font-size:14px}.home-call-copy small{font-size:10px}.home-call-arrow{font-size:24px}}
 @media(prefers-reduced-motion:reduce){.xperia-flow::before,.aurora-ribbon-group,.aurora-ribbon-highlight,.aurora-ribbon-sheen{animation:none!important}}
