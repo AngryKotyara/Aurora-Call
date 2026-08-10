@@ -13,6 +13,12 @@ function brandLockup(className = "") {
   </div>`;
 }
 
+function callIcon(mode){
+  return mode==="video"
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="3"></rect><path d="m15 10 5-3v10l-5-3z"></path></svg>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.3 3.8 10 7.7 8.2 10c1.2 2.4 3.3 4.5 5.8 5.8l2.3-1.8 3.9 2.7c.5.4.7 1 .4 1.6-.6 1.3-1.9 2.2-3.4 2.1C10 19.8 4.2 14 3.6 6.8c-.1-1.5.8-2.8 2.1-3.4.6-.3 1.2-.1 1.6.4z"></path></svg>`;
+}
+
 function navigation(activeScreen) {
   const items = [["home","⌂","Звонки"],["history","◷","История"],["friends","♙","Друзья"],["settings","⚙","Настройки"]];
   return `<nav class="nav" aria-label="Основная навигация">${items.map(([screen,icon,label])=>`<button data-nav="${screen}" class="${activeScreen===screen?"on":""}" aria-label="${label}">${icon}</button>`).join("")}</nav>`;
@@ -20,7 +26,7 @@ function navigation(activeScreen) {
 
 function friendCallCard(friend) {
   const id=escapeHtml(friend.id), username=escapeHtml(friend.username), initial=escapeHtml(friend.username[0]?.toUpperCase()||"?");
-  return `<div class="card row" data-select="${id}" data-name="${username}"><span class="av" aria-hidden="true">${initial}</span><div class="grow"><b>${username}</b><div class="muted">Нажмите для выбора</div></div><button class="mini" data-call="audio" data-id="${id}" data-name="${username}" aria-label="Аудиозвонок: ${username}">☎</button><button class="mini v" data-call="video" data-id="${id}" data-name="${username}" aria-label="Видеозвонок: ${username}">▣</button></div>`;
+  return `<div class="card row" data-select="${id}" data-name="${username}"><span class="av" aria-hidden="true">${initial}</span><div class="grow"><b>${username}</b><div class="muted">Нажмите для выбора</div></div><button class="mini contact-call audio" data-call="audio" data-id="${id}" data-name="${username}" aria-label="Аудиозвонок: ${username}">${callIcon("audio")}</button><button class="mini contact-call video" data-call="video" data-id="${id}" data-name="${username}" aria-label="Видеозвонок: ${username}">${callIcon("video")}</button></div>`;
 }
 
 function friendListItem(friend) {
