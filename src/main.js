@@ -10,3 +10,7 @@ import "./voice-messages-v2.js";
 import "./storage-media-hydrator.js";
 import "./chat-delete-resilience.js";
 import "./interaction-polish.js";
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch((error) => console.warn("Service worker unavailable", error)));
+}
