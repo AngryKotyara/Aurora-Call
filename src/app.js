@@ -8,7 +8,7 @@ import {
   inspectMediaPermissions,
   requestMediaPermissions,
 } from "./media-permissions.js";
-import { installNavPolish } from "./nav-polish.js";
+import { installNavPolish } from "./nav-polish.js?v=20260813-gear2";
 import { clearSession, saveSession, state } from "./state.js";
 import { renderAuth, renderInvite, renderMain } from "./ui.js";
 import {
