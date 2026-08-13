@@ -20,7 +20,7 @@ function callIcon(mode){
 }
 
 function settingsIcon(){
-  return `<svg class="nav-settings-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.37.4.7.7.96.3.25.68.4 1.08.44H21v4h-.1a1.7 1.7 0 0 0-1.5.6z"></path></svg>`;
+  return `<svg class="nav-settings-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.25"></circle><path d="M12 2.75v2.1M12 19.15v2.1M2.75 12h2.1M19.15 12h2.1M5.46 5.46l1.49 1.49M17.05 17.05l1.49 1.49M18.54 5.46l-1.49 1.49M6.95 17.05l-1.49 1.49"></path><path d="M9.15 4.35 10 2.95h4l.85 1.4M19.65 9.15l1.4.85v4l-1.4.85M14.85 19.65l-.85 1.4h-4l-.85-1.4M4.35 14.85 2.95 14v-4l1.4-.85"></path><path d="m6.5 4.9 1.45.7M16.05 18.4l1.45.7M19.1 6.5l-.7 1.45M5.6 16.05l-.7 1.45M17.5 4.9l-1.45.7M7.95 18.4l-1.45.7M4.9 6.5l.7 1.45M18.4 16.05l.7 1.45"></path></svg>`;
 }
 
 function navigation(activeScreen) {
