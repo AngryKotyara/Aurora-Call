@@ -19,8 +19,12 @@ function callIcon(mode){
     : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.3 3.8 10 7.7 8.2 10c1.2 2.4 3.3 4.5 5.8 5.8l2.3-1.8 3.9 2.7c.5.4.7 1 .4 1.6-.6 1.3-1.9 2.2-3.4 2.1C10 19.8 4.2 14 3.6 6.8c-.1-1.5.8-2.8 2.1-3.4.6-.3 1.2-.1 1.6.4z"></path></svg>`;
 }
 
+function settingsIcon(){
+  return `<svg class="nav-settings-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10"></path><path d="M18 7h2"></path><circle cx="16" cy="7" r="2"></circle><path d="M4 17h2"></path><path d="M10 17h10"></path><circle cx="8" cy="17" r="2"></circle></svg>`;
+}
+
 function navigation(activeScreen) {
-  const items = [["home","⌂","Звонки"],["history","◷","История"],["friends","♙","Друзья"],["settings","⚙","Настройки"]];
+  const items = [["home","⌂","Звонки"],["history","◷","История"],["friends","♙","Друзья"],["settings",settingsIcon(),"Настройки"]];
   return `<nav class="nav" aria-label="Основная навигация">${items.map(([screen,icon,label])=>`<button data-nav="${screen}" class="${activeScreen===screen?"on":""}" aria-label="${label}">${icon}</button>`).join("")}</nav>`;
 }
 
