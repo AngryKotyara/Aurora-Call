@@ -33,6 +33,12 @@ function installStyles() {
       zoom: 1 !important;
     }
 
+    /* Keep the A crisp: the SVG already has its own glow, so avoid stacking a large blur around it. */
+    .auth-a-logo {
+      filter: drop-shadow(0 0 3px rgba(199, 107, 255, .48)) drop-shadow(0 0 8px rgba(112, 67, 255, .26)) !important;
+      shape-rendering: geometricPrecision;
+    }
+
     .auth-v2-field input,
     .auth-v2-field textarea,
     .auth-v2-registration .field {
