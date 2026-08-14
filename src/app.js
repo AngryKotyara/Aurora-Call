@@ -1,4 +1,4 @@
-import { rpc } from "./api.js";
+import { registerByEmail, rpc } from "./api.js";
 import { applyBranding } from "./branding.js";
 import { pickCallContact } from "./call-picker.js";
 import { startCall, startSignalPolling } from "./calls.js";
@@ -12,8 +12,6 @@ import { installNavPolish } from "./nav-polish.js?v=20260813-gear2";
 import { clearSession, saveSession, state } from "./state.js";
 import { renderAuth, renderInvite, renderMain } from "./ui.js";
 import {
-  downloadAccessKey,
-  generateAccessKey,
   hashSecret,
   isValidUsername,
   query,
@@ -23,28 +21,26 @@ import {
 applyBranding();
 installIncomingCallAlerting();
 
-async function register(username) {
+async function register(username, email) {
   try {
     if (!isValidUsername(username)) {
       throw new Error("Имя: 3–24 буквы, цифры или _");
     }
 
-    const accessKey = generateAccessKey();
-    const session = await rpc("register_call_user", {
-      p_username: username,
-      p_hash: await hashSecret(accessKey),
-    });
-
-    saveSession(session);
-    downloadAccessKey(username, accessKey);
-    await render();
-    await acceptInviteFromUrl();
+    await registerByEmail(username, email);
+    showToast("Пароль отправлен на указанную почту", true);
+    renderAuth({ onRegister: register, onLogin: login, registrationSentTo: email });
   } catch (error) {
-    showToast(
-      /duplicate|unique/i.test(error.message)
-        ? "Имя пользователя занято"
-        : error.message,
-    );
+    const messages = {
+      invalid_email: "Введите корректный адрес электронной почты",
+      username_taken: "Имя пользователя уже занято",
+      email_taken: "Эта почта уже используется",
+      rate_limited: "Слишком много попыток. Попробуйте позже",
+      mail_not_configured: "Отправка почты ещё не настроена на сервере",
+      email_delivery_failed: "Не удалось отправить письмо. Попробуйте ещё раз",
+      registration_failed: "Не удалось завершить регистрацию",
+    };
+    showToast(messages[error.message] || error.message);
   }
 }
 
