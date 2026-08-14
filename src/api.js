@@ -25,3 +25,19 @@ export async function rpc(functionName, body, policy = {}) {
   if (!response.ok) throw new Error(getErrorMessage(responseBody));
   return responseBody ? JSON.parse(responseBody) : null;
 }
+
+export async function registerByEmail(username, email) {
+  const response = await resilientFetch(`${config.functionsBaseUrl}aurora-register-email`, {
+    method: "POST",
+    headers: {
+      apikey: config.supabasePublishableKey,
+      "Content-Type": "application/json",
+      "X-Client-Info": "aurora-call-web/1",
+    },
+    body: JSON.stringify({ username, email }),
+  }, { retries: 0, timeoutMs: 20000 });
+
+  const responseBody = await response.text();
+  if (!response.ok) throw new Error(getErrorMessage(responseBody));
+  return responseBody ? JSON.parse(responseBody) : null;
+}
