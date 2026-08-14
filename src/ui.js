@@ -53,9 +53,28 @@ function mediaAccessCard(permission={status:"prompt"},compact=false){
  return `<div class="card media-access ${isGranted?"granted":""} ${compact?"compact":""}" data-media-status="${escapeHtml(permission.status)}"><span class="media-access-icon" aria-hidden="true">${content.icon}</span><div class="media-access-copy"><h2>${content.title}</h2><p class="muted">${content.text}</p></div><button class="btn ${isGranted?"permission-granted":""}" data-request-media ${isGranted||isUnsupported?"disabled":""}>${content.action}</button></div>`;
 }
 
-export function renderAuth({onRegister,onLogin}){
- root.innerHTML=`<main class="app">${brandLockup("auth-brand")}<h1>Регистрация</h1><p class="muted">Имя уникально и не меняется.</p><label class="sr-only" for="name">Имя пользователя</label><input id="name" class="field" autocomplete="username" placeholder="Имя пользователя" /><button id="create" class="btn">Создать аккаунт</button><div class="card"><b>Вход</b><label class="sr-only" for="access">Ключ доступа</label><textarea id="access" class="field" autocomplete="current-password" placeholder="Ключ доступа"></textarea><button id="login" class="btn ghost">Войти</button></div></main>`;
- query("#create").addEventListener("click",()=>onRegister(query("#name").value.trim())); query("#login").addEventListener("click",()=>onLogin(query("#name").value.trim(),query("#access").value.trim()));
+export function renderAuth({onRegister,onLogin,registrationSentTo=""}){
+  const sent = registrationSentTo ? `<div class="card" role="status"><b>Проверьте почту</b><p class="muted">Пароль отправлен на ${escapeHtml(registrationSentTo)}. После получения войдите ниже по имени и паролю.</p></div>` : "";
+  root.innerHTML=`<main class="app">${brandLockup("auth-brand")}<section class="registration-flow"><h1>Регистрация</h1><p class="muted">Сначала выберите уникальное имя. На следующем шаге укажите почту — пароль придёт письмом.</p><div id="register-step-name"><label class="sr-only" for="register-name">Имя пользователя</label><input id="register-name" class="field" autocomplete="username" placeholder="Имя пользователя" /><button id="register-next" class="btn">Продолжить</button></div><div id="register-step-email" hidden><div class="card"><span class="muted">Имя пользователя</span><h2 id="register-name-preview"></h2></div><label class="sr-only" for="register-email">Электронная почта</label><input id="register-email" class="field" type="email" inputmode="email" autocomplete="email" placeholder="Электронная почта" /><button id="create" class="btn">Отправить пароль на почту</button><button id="register-back" class="btn ghost" type="button">Назад</button></div>${sent}</section><div class="card"><b>Вход</b><p class="muted">Для уже зарегистрированных пользователей вход остаётся по имени и ключу доступа.</p><label class="sr-only" for="login-name">Имя пользователя</label><input id="login-name" class="field" autocomplete="username" placeholder="Имя пользователя" /><label class="sr-only" for="access">Ключ доступа</label><textarea id="access" class="field" autocomplete="current-password" placeholder="Ключ доступа"></textarea><button id="login" class="btn ghost">Войти</button></div></main>`;
+
+  const nameStep=query("#register-step-name"), emailStep=query("#register-step-email"), registerName=query("#register-name"), email=query("#register-email"), preview=query("#register-name-preview"), next=query("#register-next"), create=query("#create");
+  next.addEventListener("click",()=>{
+    const username=registerName.value.trim();
+    if(!username){registerName.focus();return;}
+    preview.textContent=username;
+    nameStep.hidden=true;
+    emailStep.hidden=false;
+    email.focus();
+  });
+  query("#register-back").addEventListener("click",()=>{emailStep.hidden=true;nameStep.hidden=false;registerName.focus();});
+  create.addEventListener("click",async()=>{
+    const username=registerName.value.trim(), address=email.value.trim();
+    if(!address){email.focus();return;}
+    create.disabled=true;
+    create.textContent="Отправляем…";
+    try{await onRegister(username,address);}finally{if(document.body.contains(create)){create.disabled=false;create.textContent="Отправить пароль на почту";}}
+  });
+  query("#login").addEventListener("click",()=>onLogin(query("#login-name").value.trim(),query("#access").value.trim()));
 }
 
 export function renderMain({activeScreen,session,friends,callHistory,mediaPermission,onNavigate,onSelectFriend,onCall,onGenerateInvite,onDeleteFriend,onRequestMediaAccess,onLogout}){
