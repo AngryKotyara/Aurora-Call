@@ -97,9 +97,32 @@ function rebuild(){
   reg.style.display="block";
   const back=document.createElement("button");back.type="button";back.className="auth-v2-back";back.textContent="Вернуться ко входу";regHost.append(back);
 
-  shell.querySelector(".auth-v2-eye").addEventListener("click",()=>{access.type=access.type==="password"?"text":"password"});
-  shell.querySelector("[data-open-register]").addEventListener("click",()=>{shell.querySelector("[data-auth-login]").style.display="none";shell.querySelector(".auth-v2-divider").style.display="none";shell.querySelector(".auth-v2-socials").style.display="none";shell.querySelector(".auth-v2-signup").style.display="none";regHost.classList.add("on");reg.querySelector("#register-name")?.focus()});
-  back.addEventListener("click",()=>{regHost.classList.remove("on");shell.querySelector("[data-auth-login]").style.display="block";shell.querySelector(".auth-v2-divider").style.display="flex";shell.querySelector(".auth-v2-socials").style.display="grid";shell.querySelector(".auth-v2-signup").style.display="block";loginName.focus()});
+  const loginPanel=shell.querySelector("[data-auth-login]");
+  const signup=shell.querySelector(".auth-v2-signup");
+  const divider=shell.querySelector(".auth-v2-divider");
+  const socials=shell.querySelector(".auth-v2-socials");
+
+  const showRegistration=()=>{
+    if(loginPanel)loginPanel.style.display="none";
+    if(divider)divider.style.display="none";
+    if(socials)socials.style.display="none";
+    if(signup)signup.style.display="none";
+    regHost.classList.add("on");
+    reg.querySelector("#register-name")?.focus();
+  };
+
+  const showLogin=()=>{
+    regHost.classList.remove("on");
+    if(loginPanel)loginPanel.style.display="block";
+    if(divider)divider.style.display="flex";
+    if(socials)socials.style.display="grid";
+    if(signup)signup.style.display="block";
+    loginName.focus();
+  };
+
+  shell.querySelector(".auth-v2-eye")?.addEventListener("click",()=>{access.type=access.type==="password"?"text":"password"});
+  shell.querySelector("[data-open-register]")?.addEventListener("click",showRegistration);
+  back.addEventListener("click",showLogin);
 
   app.replaceWith(shell);
   shell.dataset.authV2="1";
