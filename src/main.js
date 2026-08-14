@@ -3,7 +3,8 @@
 import "./media-compression-hook.js";
 import "./resumable-media.js";
 import "./app.js?v=20260814-auth2";
-import "./auth-screen.js?v=20260814-auth7";
+import "./auth-screen.js?v=20260814-auth8";
+import "./auth-screen-polish.js?v=20260814-auth8";
 import "./hero-copy-polish.js";
 import "./home-fullscreen-flow.js";
 import "./home-call-buttons.js";
@@ -13,5 +14,5 @@ import "./chat-delete-resilience.js";
 import "./interaction-polish.js";
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch((error) => console.warn("Service worker unavailable", error)));
+  window.addEventListener("load", () => window.navigator.serviceWorker.register("/sw.js").catch((error) => console.warn("Service worker unavailable", error)));
 }
