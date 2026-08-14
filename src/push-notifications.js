@@ -83,6 +83,7 @@ async function enableNotifications() {
 }
 
 async function disableNotifications() {
+  if (!supported()) return;
   try {
     const registration = await getRegistration();
     const subscription = await registration.pushManager.getSubscription();
@@ -119,6 +120,9 @@ function renderPushCard() {
     settings.insertBefore(card, qr || settings.querySelector("#logout"));
   }
   const copy = cardCopy();
+  const signature = JSON.stringify(copy);
+  if (card.dataset.signature === signature) return;
+  card.dataset.signature = signature;
   card.classList.toggle("granted", Boolean(copy.enabled));
   card.innerHTML = `<span class="media-access-icon" aria-hidden="true">${copy.enabled ? "✓" : "●"}</span><div class="media-access-copy"><h2>${copy.title}</h2><p class="muted">${copy.text}</p></div><button class="btn ${copy.enabled ? "ghost" : ""}" data-push-toggle ${copy.disabled ? "disabled" : ""}>${copy.action}</button>`;
   card.querySelector("[data-push-toggle]")?.addEventListener("click", () => {
@@ -150,12 +154,13 @@ function handlePushLaunch() {
 
 export function initPushNotifications() {
   renderPushCard();
-  new MutationObserver(renderPushCard).observe(document.getElementById("root"), { childList: true, subtree: true });
+  const root = document.getElementById("root");
+  if (root) new MutationObserver(renderPushCard).observe(root, { childList: true, subtree: true });
   window.setInterval(() => {
     renderPushCard();
-    if (Notification.permission === "granted" && state.session) void ensureSubscription().catch(() => {});
+    if (supported() && Notification.permission === "granted" && state.session) void ensureSubscription().catch(() => {});
   }, 5000);
-  window.addEventListener("load", () => setTimeout(handlePushLaunch, 600));
+  window.setTimeout(handlePushLaunch, 600);
   navigator.serviceWorker?.addEventListener("message", (event) => {
     if (event.data?.type === "aurora-push-open" && event.data.url) location.assign(event.data.url);
   });
