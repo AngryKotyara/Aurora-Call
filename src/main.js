@@ -3,7 +3,7 @@
 import "./media-compression-hook.js";
 import "./resumable-media.js";
 import "./app.js?v=20260814-auth2";
-import "./auth-layout.js?v=20260814-auth3";
+import "./auth-layout.js?v=20260814-auth4";
 import "./hero-copy-polish.js";
 import "./home-fullscreen-flow.js";
 import "./home-call-buttons.js";
