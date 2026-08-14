@@ -1,0 +1,19 @@
+{
+  "name": "Aurora Call",
+  "short_name": "Aurora Call",
+  "description": "Аудио- и видеозвонки, сообщения и уведомления Aurora Call.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07070c",
+  "theme_color": "#07070c",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/src/assets/aurora-call-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
