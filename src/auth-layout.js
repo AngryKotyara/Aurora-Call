@@ -40,11 +40,14 @@ function installStyles() {
       letter-spacing:-.045em!important;
     }
     .aurora-auth-shell .auth-brand .brand-logo-frame{
-      width:112px!important;height:112px!important;border-radius:30px!important;
-      border:1px solid rgba(177,114,255,.32)!important;background:#040209!important;
-      box-shadow:0 0 0 1px rgba(0,0,0,.75),0 22px 70px rgba(111,42,255,.42),0 0 55px rgba(180,80,255,.18)!important;
+      width:132px!important;height:118px!important;overflow:visible!important;border:0!important;border-radius:0!important;
+      background:transparent!important;box-shadow:none!important;isolation:auto!important;
     }
-    .aurora-auth-shell .auth-brand .brand-logo{width:139px!important;height:139px!important}
+    .aurora-auth-shell .auth-brand .brand-logo{
+      width:150px!important;height:150px!important;max-width:none!important;object-fit:cover!important;
+      mix-blend-mode:screen!important;filter:drop-shadow(0 0 14px rgba(173,80,255,.72)) drop-shadow(0 0 28px rgba(95,54,255,.42))!important;
+      transform:scale(1.06)!important;
+    }
     .aurora-auth-tagline{margin:0 0 28px;color:#a8a9bd;font-size:16px;letter-spacing:.01em;text-align:center}
 
     .auth-login-view,.auth-registration-view{
@@ -101,8 +104,8 @@ function installStyles() {
 
     @media (max-width:390px){
       .aurora-auth-shell{padding-left:16px!important;padding-right:16px!important}
-      .aurora-auth-shell .auth-brand .brand-logo-frame{width:94px!important;height:94px!important;border-radius:26px!important}
-      .aurora-auth-shell .auth-brand .brand-logo{width:118px!important;height:118px!important}
+      .aurora-auth-shell .auth-brand .brand-logo-frame{width:112px!important;height:102px!important}
+      .aurora-auth-shell .auth-brand .brand-logo{width:130px!important;height:130px!important}
       .aurora-auth-shell .auth-brand{font-size:29px!important}
       .auth-login-view,.auth-registration-view{padding:22px 17px 18px!important;border-radius:26px!important}
     }
