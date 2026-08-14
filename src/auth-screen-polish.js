@@ -33,15 +33,6 @@ function installStyles() {
       zoom: 1 !important;
     }
 
-    .auth-a-logo {
-      filter: saturate(1.45) contrast(1.22) brightness(1.18) drop-shadow(0 0 7px rgba(236,155,255,.95)) drop-shadow(0 0 18px rgba(156,62,255,.95)) drop-shadow(0 0 34px rgba(87,52,255,.62)) !important;
-    }
-
-    .auth-a-logo path:first-of-type {
-      stroke: rgba(245,190,255,.28);
-      stroke-width: 1.2px;
-    }
-
     .auth-v2-field input,
     .auth-v2-field textarea,
     .auth-v2-registration .field {
