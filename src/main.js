@@ -12,7 +12,15 @@ import "./voice-messages-v2.js";
 import "./storage-media-hydrator.js";
 import "./chat-delete-resilience.js";
 import "./interaction-polish.js";
+import { initPushNotifications } from "./push-notifications.js?v=20260815-push1";
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  window.addEventListener("load", () => window.navigator.serviceWorker.register("/sw.js").catch((error) => console.warn("Service worker unavailable", error)));
+  window.addEventListener("load", async () => {
+    try {
+      await window.navigator.serviceWorker.register("/sw.js?v=20260815-push1");
+      initPushNotifications();
+    } catch (error) {
+      console.warn("Service worker unavailable", error);
+    }
+  });
 }
