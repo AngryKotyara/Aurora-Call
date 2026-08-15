@@ -2,7 +2,7 @@
 // Keep startup order explicit: core app first, then UI/features that observe it.
 import "./media-compression-hook.js";
 import "./resumable-media.js";
-import "./app.js?v=20260814-auth2";
+import "./app.js?v=20260815-permissions2";
 import "./auth-screen.js?v=20260814-auth8";
 import "./auth-screen-polish.js?v=20260814-auth8";
 import "./hero-copy-polish.js";
@@ -12,7 +12,7 @@ import "./voice-messages-v2.js";
 import "./storage-media-hydrator.js";
 import "./chat-delete-resilience.js";
 import "./interaction-polish.js";
-import "./permission-check-animation.js?v=20260815-permissions1";
+import "./permission-check-animation.js?v=20260815-permissions2";
 import { initPushNotifications } from "./push-notifications.js?v=20260815-push1";
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
