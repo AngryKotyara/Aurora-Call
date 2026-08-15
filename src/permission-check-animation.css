@@ -1,0 +1,42 @@
+.media-access-icon.permission-check-animated {
+  animation: permission-icon-pop 620ms cubic-bezier(.2,.9,.25,1.25) both;
+}
+
+.media-access-icon.permission-check-animated::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 20px;
+  border-right: 4px solid currentColor;
+  border-bottom: 4px solid currentColor;
+  border-radius: 2px;
+  transform: rotate(45deg) scale(0);
+  transform-origin: 70% 70%;
+  animation: permission-check-draw 460ms 130ms cubic-bezier(.2,.8,.2,1) forwards;
+}
+
+.media-access-icon.permission-check-animated {
+  position: relative;
+  color: transparent !important;
+}
+
+.media-access.granted .media-access-icon.permission-check-animated::after {
+  color: #70e6b4;
+}
+
+@keyframes permission-icon-pop {
+  0% { transform: scale(.82); opacity: .5; box-shadow: 0 0 0 0 rgba(76,217,157,0); }
+  48% { transform: scale(1.12); opacity: 1; box-shadow: 0 0 0 8px rgba(76,217,157,.09); }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(76,217,157,0); }
+}
+
+@keyframes permission-check-draw {
+  0% { transform: rotate(45deg) scale(0); opacity: 0; }
+  55% { transform: rotate(45deg) scale(1.16); opacity: 1; }
+  100% { transform: rotate(45deg) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-access-icon.permission-check-animated,
+  .media-access-icon.permission-check-animated::after { animation-duration: 1ms; animation-delay: 0ms; }
+}
