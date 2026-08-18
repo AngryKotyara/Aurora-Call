@@ -30,6 +30,23 @@ async function login(username, accessKey) {
     saveSession(session); await render(); await acceptInviteFromUrl();
   } catch { showToast("Неверное имя или ключ"); }
 }
+
+// Stable auth bridge used by the rebuilt login screen. This avoids relying on
+// event listeners attached to DOM nodes before they are moved/replaced, which
+// is unreliable in some Android WebViews.
+document.addEventListener("aurora-auth-login", (event) => {
+  const username = String(event.detail?.username || "").trim();
+  const accessKey = String(event.detail?.accessKey || "").trim();
+  if (!username || !accessKey) { showToast("Введите имя и ключ доступа"); return; }
+  void login(username, accessKey);
+});
+document.addEventListener("aurora-auth-register", (event) => {
+  const username = String(event.detail?.username || "").trim();
+  const email = String(event.detail?.email || "").trim();
+  if (!username || !email) { showToast("Введите имя и электронную почту"); return; }
+  void register(username, email);
+});
+
 function logout(){ clearSession(); renderAuth({ onRegister:register, onLogin:login }); }
 function selectFriend(friend){ state.selectedFriend=friend; showToast(`${friend.name} выбран`,true); }
 
@@ -70,24 +87,22 @@ async function toggleMediaAccess(activeScreen){
 }
 
 async function beginCall(mode,friend=null){ let target=friend; if(!target)target=await pickCallContact(state.friends||[],mode); if(!target)return; state.selectedFriend=target; void startCall(mode); }
-
 async function render(activeScreen="home"){
   if(!state.session){renderAuth({onRegister:register,onLogin:login});return;}
   const [friends,callHistory,mediaPermission]=await Promise.all([
     rpc("list_call_friends",{p_token:state.session.token}).catch(()=>[]),
     rpc("list_call_history",{p_token:state.session.token}).catch(()=>[]),
-    inspectMediaPermissions(state.session).catch(error=>{console.warn("Media permission inspection failed during startup",error);return{status:"prompt"};})
+    inspectMediaPermissions(state.session).catch(()=>({status:"prompt"}))
   ]);
   state.friends=Array.isArray(friends)?friends:[]; state.callHistory=Array.isArray(callHistory)?callHistory:[];
   renderMain({activeScreen,session:state.session,friends:state.friends,callHistory:state.callHistory,mediaPermission:mediaPermission||{status:"prompt"},onNavigate:render,onSelectFriend:selectFriend,onCall:(mode,friend)=>void beginCall(mode,friend||null),onGenerateInvite:generateInvite,onDeleteFriend:deleteFriend,onRequestMediaAccess:()=>toggleMediaAccess(activeScreen),onLogout:logout});
 }
-
 async function bootstrap(){
-  try{await render();}catch(error){console.error("Aurora startup render failed",error);const root=document.getElementById("root");if(root){root.innerHTML=`<main class="app"><div class="card"><h1>Aurora Call</h1><p class="muted">Не удалось загрузить данные. Интерфейс запущен в безопасном режиме.</p><button id="aurora-retry-start" class="btn">Повторить</button></div></main>`;document.getElementById("aurora-retry-start")?.addEventListener("click",()=>location.reload());}return;}
-  try{await acceptInviteFromUrl();}catch(error){console.warn("Invite bootstrap failed",error);}
-  try{initChat();}catch(error){console.warn("Chat bootstrap failed",error);}
-  try{installNavPolish();}catch(error){console.warn("Navigation polish failed",error);}
-  document.addEventListener("aurora-chat-call",event=>{const mode=event.detail?.mode==="video"?"video":"audio";void beginCall(mode,state.selectedFriend);});
-  try{startSignalPolling();}catch(error){console.warn("Signal polling failed",error);}
+  try{await render();}catch(error){console.error("Aurora startup render failed",error);const root=document.getElementById("root");if(root)root.innerHTML=`<main class="app"><div class="card"><h1>Aurora Call</h1><p class="muted">Не удалось загрузить данные. Интерфейс запущен в безопасном режиме.</p><button id="aurora-retry-start" class="btn">Повторить</button></div></main>`;document.getElementById("aurora-retry-start")?.addEventListener("click",()=>location.reload());return;}
+  try{await acceptInviteFromUrl();}catch(error){console.warn("Invite bootstrap failed",error)}
+  try{initChat();}catch(error){console.warn("Chat bootstrap failed",error)}
+  try{installNavPolish();}catch(error){console.warn("Navigation polish failed",error)}
+  document.addEventListener("aurora-chat-call",event=>{const mode=event.detail?.mode==="video"?"video":"audio";void beginCall(mode,state.selectedFriend)});
+  try{startSignalPolling();}catch(error){console.warn("Signal polling failed",error)}
 }
 void bootstrap();
