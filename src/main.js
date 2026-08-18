@@ -2,9 +2,9 @@
 // Keep startup order explicit: core app first, then UI/features that observe it.
 import "./media-compression-hook.js";
 import "./resumable-media.js";
-import "./app.js?v=20260815-permissions2";
-import "./auth-screen.js?v=20260814-auth8";
-import "./auth-screen-polish.js?v=20260814-auth8";
+import "./app.js?v=20260818-android-auth1";
+import "./auth-screen.js?v=20260818-android-auth1";
+import "./auth-screen-polish.js?v=20260818-android-auth1";
 import "./hero-copy-polish.js";
 import "./home-fullscreen-flow.js";
 import "./home-call-buttons.js";
