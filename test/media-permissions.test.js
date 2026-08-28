@@ -17,6 +17,12 @@ function memoryStorage() {
 
 const session = { username: "Aurora_User" };
 
+function assertPermission(result, status) {
+  assert.equal(result.status, status);
+  assert.equal(typeof result.deviceId, "string");
+  assert.ok(result.deviceId.length > 0);
+}
+
 test("media access is requested once and persisted for the account", async () => {
   const storage = memoryStorage();
   let mediaRequests = 0;
@@ -36,15 +42,17 @@ test("media access is requested once and persisted for the account", async () =>
     },
   };
 
-  assert.deepEqual(await requestMediaPermissions(session, browser, storage), {
-    status: "granted",
-  });
+  assertPermission(
+    await requestMediaPermissions(session, browser, storage),
+    "granted",
+  );
   assert.equal(mediaRequests, 1);
   assert.equal(stoppedTracks, 2);
 
-  assert.deepEqual(await inspectMediaPermissions(session, browser, storage), {
-    status: "granted",
-  });
+  assertPermission(
+    await inspectMediaPermissions(session, browser, storage),
+    "granted",
+  );
   assert.equal(mediaRequests, 1);
 });
 
@@ -64,17 +72,17 @@ test("browser denial overrides a previously stored grant", async () => {
     },
   };
 
-  assert.deepEqual(
+  assertPermission(
     await inspectMediaPermissions(session, deniedBrowser, storage),
-    { status: "blocked" },
+    "blocked",
   );
-  assert.deepEqual(
+  assertPermission(
     await inspectMediaPermissions(
       session,
       browserWithoutPermissionApi,
       storage,
     ),
-    { status: "prompt" },
+    "prompt",
   );
 });
 
@@ -91,9 +99,9 @@ test("permission prompt is detected without a stored grant", async () => {
     },
   };
 
-  assert.deepEqual(
+  assertPermission(
     await inspectMediaPermissions(session, browser, memoryStorage()),
-    { status: "prompt" },
+    "prompt",
   );
   assert.equal(mediaRequests, 0);
 });
@@ -120,9 +128,9 @@ test("stored access survives a browser restart that reports prompt", async () =>
     },
   };
 
-  assert.deepEqual(
+  assertPermission(
     await inspectMediaPermissions(session, browserAfterRestart, storage),
-    { status: "granted" },
+    "granted",
   );
   assert.equal(mediaRequests, 0);
 });
@@ -147,15 +155,16 @@ test("temporary device errors do not erase a stored grant", async () => {
     },
   };
 
-  assert.deepEqual(
+  assertPermission(
     await requestMediaPermissions(
       session,
       temporarilyUnavailableBrowser,
       storage,
     ),
-    { status: "error" },
+    "error",
   );
-  assert.deepEqual(await inspectMediaPermissions(session, browser, storage), {
-    status: "granted",
-  });
+  assertPermission(
+    await inspectMediaPermissions(session, browser, storage),
+    "granted",
+  );
 });

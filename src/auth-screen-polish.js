@@ -125,7 +125,9 @@ function polish() {
     signup.dataset.polished = "1";
     const button = signup.querySelector("[data-open-register]");
     if (button) {
-      const textNode = [...signup.childNodes].find(node => node.nodeType === Node.TEXT_NODE);
+      const textNode = [...signup.childNodes].find(
+        (node) => node.nodeType === Node.TEXT_NODE,
+      );
       if (textNode) textNode.textContent = "Нет аккаунта?";
       button.textContent = "Регистрация";
     }
@@ -134,4 +136,8 @@ function polish() {
 
 installStyles();
 polish();
-if (root) new MutationObserver(polish).observe(root, { childList: true, subtree: true });
+if (root)
+  new MutationObserver(polish).observe(root, {
+    childList: true,
+    subtree: true,
+  });

@@ -5,7 +5,8 @@ const ACTIVE_CLASS = "permission-check-animated";
 function isEnabledCard(card) {
   if (card.dataset.mediaStatus === "granted") return true;
   if (card.hasAttribute("data-push-settings")) {
-    const title = card.querySelector(".media-access-copy h2")?.textContent || "";
+    const title =
+      card.querySelector(".media-access-copy h2")?.textContent || "";
     return title.includes("включены");
   }
   return card.classList.contains("granted");
@@ -25,7 +26,8 @@ function polishMediaButton(card) {
 
 function animateCheck(card) {
   polishMediaButton(card);
-  if (!isEnabledCard(card) || card.dataset.permissionAnimationReady === "1") return;
+  if (!isEnabledCard(card) || card.dataset.permissionAnimationReady === "1")
+    return;
   const icon = card.querySelector(ICON_SELECTOR);
   if (!icon) return;
   card.dataset.permissionAnimationReady = "1";
@@ -34,15 +36,37 @@ function animateCheck(card) {
   icon.classList.add(ACTIVE_CLASS);
 }
 
-function scan(root = document) { root.querySelectorAll?.(ROOT_SELECTOR).forEach(animateCheck); }
+function scan(root = document) {
+  root.querySelectorAll?.(ROOT_SELECTOR).forEach(animateCheck);
+}
 const observer = new MutationObserver((records) => {
   for (const record of records) {
-    if (record.type === "childList") record.addedNodes.forEach((node) => { if (!(node instanceof Element)) return; if (node.matches?.(ROOT_SELECTOR)) animateCheck(node); scan(node); });
-    if (record.type === "attributes" && record.target instanceof Element && record.target.matches(ROOT_SELECTOR)) {
-      if (!isEnabledCard(record.target)) record.target.dataset.permissionAnimationReady = "0";
+    if (record.type === "childList")
+      record.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (node.matches?.(ROOT_SELECTOR)) animateCheck(node);
+        scan(node);
+      });
+    if (
+      record.type === "attributes" &&
+      record.target instanceof Element &&
+      record.target.matches(ROOT_SELECTOR)
+    ) {
+      if (!isEnabledCard(record.target))
+        record.target.dataset.permissionAnimationReady = "0";
       animateCheck(record.target);
     }
   }
 });
-function init(){scan();observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["class","data-media-status"]});}
-if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
+function init() {
+  scan();
+  observer.observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "data-media-status"],
+  });
+}
+if (document.readyState === "loading")
+  document.addEventListener("DOMContentLoaded", init, { once: true });
+else init();

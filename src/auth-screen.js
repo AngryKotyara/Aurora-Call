@@ -22,10 +22,14 @@ const lockIcon = `<svg viewBox="0 0 24 24"><rect x="5.5" y="10" width="13" heigh
 const eyeIcon = `<svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5z"/><circle cx="12" cy="12" r="2.4"/></svg>`;
 const arrowIcon = `<svg viewBox="0 0 24 24"><path d="M5 12h13"/><path d="m14 8 4 4-4 4"/></svg>`;
 
-function installStyle(){
-  let s=document.getElementById("aurora-auth-screen-style");
-  if(!s){s=document.createElement("style");s.id="aurora-auth-screen-style";document.head.append(s)}
-  s.textContent=`
+function installStyle() {
+  let s = document.getElementById("aurora-auth-screen-style");
+  if (!s) {
+    s = document.createElement("style");
+    s.id = "aurora-auth-screen-style";
+    document.head.append(s);
+  }
+  s.textContent = `
   body:has(.auth-v2){margin:0!important;min-height:100dvh!important;overflow-x:hidden!important;background:#02030e!important;color:#fff!important;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Inter,"Helvetica Neue",Arial,sans-serif!important}
   body:has(.auth-v2)::before{position:fixed;z-index:0;inset:0;pointer-events:none;content:"";background:radial-gradient(ellipse at 12% 31%,rgba(24,105,255,.42),transparent 37%),radial-gradient(ellipse at 88% 34%,rgba(154,38,255,.43),transparent 38%),radial-gradient(circle at 50% 39%,rgba(80,54,191,.2),transparent 31%),linear-gradient(180deg,#02030c 0%,#060819 51%,#02030d 100%)}
   body:has(.auth-v2)::after{position:fixed;z-index:0;left:-15vw;right:-15vw;bottom:-4vh;height:30vh;pointer-events:none;content:"";opacity:.72;background:radial-gradient(ellipse at 20% 63%,transparent 45%,rgba(37,93,255,.56) 46%,rgba(26,82,255,.12) 49%,transparent 52%),radial-gradient(ellipse at 80% 63%,transparent 45%,rgba(201,42,255,.57) 46%,rgba(175,35,255,.12) 49%,transparent 52%);filter:blur(1.5px)}
@@ -63,71 +67,90 @@ function installStyle(){
   `;
 }
 
-function rebuild(){
-  const app=root?.querySelector("main.app");
-  const reg=app?.querySelector(".registration-flow");
-  if(!app||!reg||app.dataset.authV2==="1")return;
-  const login=reg.nextElementSibling;
-  if(!login?.querySelector("#login"))return;
+function rebuild() {
+  const app = root?.querySelector("main.app");
+  const reg = app?.querySelector(".registration-flow");
+  if (!app || !reg || app.dataset.authV2 === "1") return;
+  const login = reg.nextElementSibling;
+  if (!login?.querySelector("#login")) return;
 
-  const loginName=login.querySelector("#login-name");
-  const accessOld=login.querySelector("#access");
-  const loginBtn=login.querySelector("#login");
-  if(!loginName||!accessOld||!loginBtn)return;
+  const loginName = login.querySelector("#login-name");
+  const accessOld = login.querySelector("#access");
+  const loginBtn = login.querySelector("#login");
+  if (!loginName || !accessOld || !loginBtn) return;
 
-  let access=accessOld;
-  if(accessOld.tagName==="TEXTAREA"){
-    access=document.createElement("input");
-    access.id="access";access.className=accessOld.className;access.type="password";access.autocomplete="current-password";access.placeholder="Password";
+  let access = accessOld;
+  if (accessOld.tagName === "TEXTAREA") {
+    access = document.createElement("input");
+    access.id = "access";
+    access.className = accessOld.className;
+    access.type = "password";
+    access.autocomplete = "current-password";
+    access.placeholder = "Ключ доступа";
     accessOld.replaceWith(access);
-  } else { access.type="password"; access.placeholder="Password"; }
-  loginName.placeholder="Email or username";
+  } else {
+    access.type = "password";
+    access.placeholder = "Ключ доступа";
+  }
+  loginName.placeholder = "Имя пользователя";
 
-  const shell=document.createElement("main");
-  shell.className="auth-v2";
-  shell.innerHTML=`<header class="auth-v2-brand">${logo}<h1>Aurora Call</h1><p>Stay connected, anywhere</p></header><section class="auth-v2-card" data-auth-login><h2>Welcome back</h2><p class="auth-v2-sub">Sign in to continue</p><div class="auth-v2-field auth-name"><span class="auth-v2-icon">${mailIcon}</span></div><div class="auth-v2-field auth-key"><span class="auth-v2-icon">${lockIcon}</span><button type="button" class="auth-v2-eye" aria-label="Показать или скрыть пароль">${eyeIcon}</button></div><div class="auth-v2-extras"><label class="auth-v2-remember"><input type="checkbox" checked><span>Remember me</span></label><button type="button" class="auth-v2-forgot">Forgot password?</button></div><div class="auth-v2-submit-wrap"><span class="auth-v2-arrow">${arrowIcon}</span></div></section><div class="auth-v2-divider">or continue with</div><div class="auth-v2-socials"><button class="auth-v2-social" type="button" disabled><span>🌐</span>Google</button><button class="auth-v2-social" type="button" disabled><span>●</span>Apple</button></div><div class="auth-v2-signup">Don’t have an account? <button type="button" data-open-register>Sign up</button></div><section class="auth-v2-registration"></section>`;
+  const shell = document.createElement("main");
+  shell.className = "auth-v2";
+  shell.innerHTML = `<header class="auth-v2-brand">${logo}<h1>Aurora Call</h1><p>Оставайтесь на связи</p></header><section class="auth-v2-card" data-auth-login><h2>С возвращением</h2><p class="auth-v2-sub">Войдите, чтобы продолжить</p><div class="auth-v2-field auth-name"><span class="auth-v2-icon">${mailIcon}</span></div><div class="auth-v2-field auth-key"><span class="auth-v2-icon">${lockIcon}</span><button type="button" class="auth-v2-eye" aria-label="Показать или скрыть ключ доступа">${eyeIcon}</button></div><div class="auth-v2-submit-wrap"><span class="auth-v2-arrow">${arrowIcon}</span></div></section><div class="auth-v2-divider">или</div><div class="auth-v2-socials"><button class="auth-v2-social" type="button" disabled><span>🌐</span>Google</button><button class="auth-v2-social" type="button" disabled><span>●</span>Apple</button></div><div class="auth-v2-signup">Нет аккаунта? <button type="button" data-open-register>Регистрация</button></div><section class="auth-v2-registration"></section>`;
 
   shell.querySelector(".auth-name").append(loginName);
   shell.querySelector(".auth-key").append(access);
   shell.querySelector(".auth-v2-submit-wrap").prepend(loginBtn);
-  loginBtn.textContent="Sign In";
+  loginBtn.textContent = "Войти";
 
-  const regHost=shell.querySelector(".auth-v2-registration");
+  const regHost = shell.querySelector(".auth-v2-registration");
   regHost.append(reg);
-  reg.style.display="block";
-  const back=document.createElement("button");back.type="button";back.className="auth-v2-back";back.textContent="Вернуться ко входу";regHost.append(back);
+  reg.style.display = "block";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "auth-v2-back";
+  back.textContent = "Вернуться ко входу";
+  regHost.append(back);
 
-  const loginPanel=shell.querySelector("[data-auth-login]");
-  const signup=shell.querySelector(".auth-v2-signup");
-  const divider=shell.querySelector(".auth-v2-divider");
-  const socials=shell.querySelector(".auth-v2-socials");
+  const loginPanel = shell.querySelector("[data-auth-login]");
+  const signup = shell.querySelector(".auth-v2-signup");
+  const divider = shell.querySelector(".auth-v2-divider");
+  const socials = shell.querySelector(".auth-v2-socials");
 
-  const showRegistration=()=>{
-    if(loginPanel)loginPanel.style.display="none";
-    if(divider)divider.style.display="none";
-    if(socials)socials.style.display="none";
-    if(signup)signup.style.display="none";
+  const showRegistration = () => {
+    if (loginPanel) loginPanel.style.display = "none";
+    if (divider) divider.style.display = "none";
+    if (socials) socials.style.display = "none";
+    if (signup) signup.style.display = "none";
     regHost.classList.add("on");
     reg.querySelector("#register-name")?.focus();
   };
 
-  const showLogin=()=>{
+  const showLogin = () => {
     regHost.classList.remove("on");
-    if(loginPanel)loginPanel.style.display="block";
-    if(divider)divider.style.display="flex";
-    if(socials)socials.style.display="grid";
-    if(signup)signup.style.display="block";
+    if (loginPanel) loginPanel.style.display = "block";
+    if (divider) divider.style.display = "flex";
+    if (socials) socials.style.display = "grid";
+    if (signup) signup.style.display = "block";
     loginName.focus();
   };
 
-  shell.querySelector(".auth-v2-eye")?.addEventListener("click",()=>{access.type=access.type==="password"?"text":"password"});
-  shell.querySelector("[data-open-register]")?.addEventListener("click",showRegistration);
-  back.addEventListener("click",showLogin);
+  shell.querySelector(".auth-v2-eye")?.addEventListener("click", () => {
+    access.type = access.type === "password" ? "text" : "password";
+  });
+  shell
+    .querySelector("[data-open-register]")
+    ?.addEventListener("click", showRegistration);
+  back.addEventListener("click", showLogin);
 
   app.replaceWith(shell);
-  shell.dataset.authV2="1";
+  shell.dataset.authV2 = "1";
 }
 
 installStyle();
 rebuild();
-if(root)new MutationObserver(rebuild).observe(root,{childList:true,subtree:true});
+if (root)
+  new MutationObserver(rebuild).observe(root, {
+    childList: true,
+    subtree: true,
+  });

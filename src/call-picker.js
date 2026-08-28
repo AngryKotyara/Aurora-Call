@@ -35,15 +35,22 @@ export function pickCallContact(friends, mode) {
     document.querySelector("#call-picker-layer")?.remove();
     const label = mode === "video" ? "Видеозвонок" : "Аудиозвонок";
     const rows = friends.length
-      ? friends.map((friend) => {
-          const id = escapeHtml(friend.id);
-          const name = escapeHtml(friend.username || friend.name || "Друг");
-          const initial = escapeHtml((friend.username || friend.name || "?")[0]?.toUpperCase() || "?");
-          return `<button class="call-picker-person" data-call-picker-id="${id}" data-call-picker-name="${name}"><span class="call-picker-avatar">${initial}</span><span><strong>${name}</strong><small>Нажмите, чтобы позвонить</small></span><span class="call-picker-action">${modeIcon(mode)}</span></button>`;
-        }).join("")
+      ? friends
+          .map((friend) => {
+            const id = escapeHtml(friend.id);
+            const name = escapeHtml(friend.username || friend.name || "Друг");
+            const initial = escapeHtml(
+              (friend.username || friend.name || "?")[0]?.toUpperCase() || "?",
+            );
+            return `<button class="call-picker-person" data-call-picker-id="${id}" data-call-picker-name="${name}"><span class="call-picker-avatar">${initial}</span><span><strong>${name}</strong><small>Нажмите, чтобы позвонить</small></span><span class="call-picker-action">${modeIcon(mode)}</span></button>`;
+          })
+          .join("")
       : '<div class="call-picker-empty">Сначала добавьте друга, чтобы начать звонок.</div>';
 
-    document.body.insertAdjacentHTML("beforeend", `<div id="call-picker-layer" class="call-picker-layer" role="dialog" aria-modal="true" aria-label="Выбор контакта"><section class="call-picker"><header class="call-picker-head"><div><span>${label}</span><h2>Кому позвонить?</h2></div><button class="call-picker-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="call-picker-list">${rows}</div></section></div>`);
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="call-picker-layer" class="call-picker-layer" role="dialog" aria-modal="true" aria-label="Выбор контакта"><section class="call-picker"><header class="call-picker-head"><div><span>${label}</span><h2>Кому позвонить?</h2></div><button class="call-picker-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><div class="call-picker-list">${rows}</div></section></div>`,
+    );
     const layer = document.querySelector("#call-picker-layer");
     let finished = false;
     const finish = (friend) => {
@@ -52,8 +59,19 @@ export function pickCallContact(friends, mode) {
       layer?.remove();
       resolve(friend);
     };
-    layer.querySelector(".call-picker-close").addEventListener("click", () => finish(null));
-    layer.addEventListener("click", (event) => { if (event.target === layer) finish(null); });
-    layer.querySelectorAll("[data-call-picker-id]").forEach((button) => button.addEventListener("click", () => finish({ id: button.dataset.callPickerId, name: button.dataset.callPickerName })));
+    layer
+      .querySelector(".call-picker-close")
+      .addEventListener("click", () => finish(null));
+    layer.addEventListener("click", (event) => {
+      if (event.target === layer) finish(null);
+    });
+    layer.querySelectorAll("[data-call-picker-id]").forEach((button) =>
+      button.addEventListener("click", () =>
+        finish({
+          id: button.dataset.callPickerId,
+          name: button.dataset.callPickerName,
+        }),
+      ),
+    );
   });
 }

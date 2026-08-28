@@ -42,11 +42,15 @@ function openFailedMessageMenu(bubble) {
   closeLocalMenu();
   const rect = bubble.getBoundingClientRect();
   const width = 142;
-  const left = Math.max(10, Math.min(window.innerWidth - width - 10, rect.right - width));
+  const left = Math.max(
+    10,
+    Math.min(window.innerWidth - width - 10, rect.right - width),
+  );
   const top = Math.min(window.innerHeight - 62, rect.bottom + 7);
 
   localBackdrop = document.createElement("div");
-  localBackdrop.className = "chat-message-menu-backdrop chat-local-delete-backdrop";
+  localBackdrop.className =
+    "chat-message-menu-backdrop chat-local-delete-backdrop";
   localBackdrop.addEventListener("click", closeLocalMenu);
 
   localMenu = document.createElement("div");
@@ -61,10 +65,12 @@ function openFailedMessageMenu(bubble) {
       <span>Удалить</span>
     </button>`;
 
-  localMenu.querySelector("[data-local-failed-delete]").addEventListener("click", () => {
-    closeLocalMenu();
-    removeBubbleImmediately(bubble);
-  });
+  localMenu
+    .querySelector("[data-local-failed-delete]")
+    .addEventListener("click", () => {
+      closeLocalMenu();
+      removeBubbleImmediately(bubble);
+    });
 
   document.body.append(localBackdrop, localMenu);
 }
@@ -91,7 +97,8 @@ function installFailedBubble(bubble) {
     }, 420);
   });
   bubble.addEventListener("pointermove", (event) => {
-    if (Math.hypot(event.clientX - startX, event.clientY - startY) > 8) cancel();
+    if (Math.hypot(event.clientX - startX, event.clientY - startY) > 8)
+      cancel();
   });
   bubble.addEventListener("pointerup", cancel);
   bubble.addEventListener("pointercancel", cancel);
@@ -103,7 +110,9 @@ function installFailedBubble(bubble) {
 
 function scanFailedMessages(root = document) {
   root
-    .querySelectorAll?.("#chat-layer .chat-bubble.is-failed, #chat-layer .chat-upload-bubble.is-failed")
+    .querySelectorAll?.(
+      "#chat-layer .chat-bubble.is-failed, #chat-layer .chat-upload-bubble.is-failed",
+    )
     .forEach(installFailedBubble);
 }
 

@@ -12,15 +12,19 @@ function getErrorMessage(responseBody) {
 
 async function sendPushEvent(action, body) {
   try {
-    await resilientFetch(`${config.functionsBaseUrl}aurora-push`, {
-      method: "POST",
-      headers: {
-        apikey: config.supabasePublishableKey,
-        "Content-Type": "application/json",
-        "X-Client-Info": "aurora-call-web/1",
+    await resilientFetch(
+      `${config.functionsBaseUrl}aurora-push`,
+      {
+        method: "POST",
+        headers: {
+          apikey: config.supabasePublishableKey,
+          "Content-Type": "application/json",
+          "X-Client-Info": "aurora-call-web/1",
+        },
+        body: JSON.stringify({ action, ...body }),
       },
-      body: JSON.stringify({ action, ...body }),
-    }, { retries: 0, timeoutMs: 7000 });
+      { retries: 0, timeoutMs: 7000 },
+    );
   } catch (error) {
     console.warn("push notification dispatch failed", error);
   }
@@ -36,7 +40,10 @@ function dispatchPushForRpc(functionName, requestBody, result) {
     });
     return;
   }
-  if (functionName === "send_chat_message" || functionName === "upload_chat_media") {
+  if (
+    functionName === "send_chat_message" ||
+    functionName === "upload_chat_media"
+  ) {
     void sendPushEvent("notify_message", {
       p_token: requestBody.p_token,
       p_to: requestBody.p_to,
@@ -46,15 +53,19 @@ function dispatchPushForRpc(functionName, requestBody, result) {
 }
 
 export async function rpc(functionName, body, policy = {}) {
-  const response = await resilientFetch(config.rpcBaseUrl + functionName, {
-    method: "POST",
-    headers: {
-      apikey: config.supabasePublishableKey,
-      "Content-Type": "application/json",
-      "X-Client-Info": "aurora-call-web/1",
+  const response = await resilientFetch(
+    config.rpcBaseUrl + functionName,
+    {
+      method: "POST",
+      headers: {
+        apikey: config.supabasePublishableKey,
+        "Content-Type": "application/json",
+        "X-Client-Info": "aurora-call-web/1",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  }, { retries: policy.retries ?? 1, timeoutMs: policy.timeoutMs ?? 15000 });
+    { retries: policy.retries ?? 1, timeoutMs: policy.timeoutMs ?? 15000 },
+  );
 
   const responseBody = await response.text();
   if (!response.ok) throw new Error(getErrorMessage(responseBody));
@@ -64,15 +75,19 @@ export async function rpc(functionName, body, policy = {}) {
 }
 
 export async function registerByEmail(username, email) {
-  const response = await resilientFetch(`${config.functionsBaseUrl}aurora-register-email`, {
-    method: "POST",
-    headers: {
-      apikey: config.supabasePublishableKey,
-      "Content-Type": "application/json",
-      "X-Client-Info": "aurora-call-web/1",
+  const response = await resilientFetch(
+    `${config.functionsBaseUrl}aurora-register-email`,
+    {
+      method: "POST",
+      headers: {
+        apikey: config.supabasePublishableKey,
+        "Content-Type": "application/json",
+        "X-Client-Info": "aurora-call-web/1",
+      },
+      body: JSON.stringify({ username, email }),
     },
-    body: JSON.stringify({ username, email }),
-  }, { retries: 0, timeoutMs: 20000 });
+    { retries: 0, timeoutMs: 20000 },
+  );
 
   const responseBody = await response.text();
   if (!response.ok) throw new Error(getErrorMessage(responseBody));

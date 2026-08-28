@@ -1,4 +1,4 @@
-import { query } from "./utils.js";
+import { escapeHtml, query } from "./utils.js";
 
 let callModalCleanup = () => {};
 
@@ -34,7 +34,9 @@ function refreshScreenShareStatus() {
   const isRemote = callScreen.dataset.remoteScreenSharing === "true";
   status.hidden = !isLocal && !isRemote;
   statusText.textContent = isLocal
-    ? isRemote ? "Вы и собеседник показываете экран" : "Вы показываете экран"
+    ? isRemote
+      ? "Вы и собеседник показываете экран"
+      : "Вы показываете экран"
     : "Собеседник показывает экран";
 }
 
@@ -43,7 +45,9 @@ export function setScreenShareActive(active) {
   const button = query("#toggle-screen-share");
   if (callScreen) callScreen.dataset.localScreenSharing = String(active);
   if (button) {
-    const label = active ? "Остановить демонстрацию экрана" : "Начать демонстрацию экрана";
+    const label = active
+      ? "Остановить демонстрацию экрана"
+      : "Начать демонстрацию экрана";
     button.dataset.active = String(active);
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-pressed", String(active));
@@ -59,14 +63,43 @@ export function setRemoteScreenShareActive(active) {
   refreshScreenShareStatus();
 }
 
+export function setCallConnectionState(connectionState) {
+  const callScreen = query("#call-modal");
+  const status = query("#call-status");
+  if (!callScreen || !status) return;
+
+  const normalized = String(connectionState || "connecting");
+  const copy = {
+    connected: "В разговоре",
+    completed: "В разговоре",
+    disconnected: "Связь прервана",
+    failed: "Не удалось соединиться",
+    closed: "Звонок завершён",
+  };
+  const visualState = ["connected", "completed"].includes(normalized)
+    ? "connected"
+    : normalized;
+  callScreen.dataset.connection = visualState;
+  status.textContent = copy[normalized] || "Соединение…";
+}
+
 function makePreviewDraggable(preview, boundary) {
   let drag = null;
   const margin = 12;
-  const dimensions = () => ({ boundary: boundary.getBoundingClientRect(), preview: preview.getBoundingClientRect() });
+  const dimensions = () => ({
+    boundary: boundary.getBoundingClientRect(),
+    preview: preview.getBoundingClientRect(),
+  });
   function place(left, top) {
     const rects = dimensions();
-    const maxLeft = Math.max(margin, rects.boundary.width - rects.preview.width - margin);
-    const maxTop = Math.max(margin, rects.boundary.height - rects.preview.height - margin);
+    const maxLeft = Math.max(
+      margin,
+      rects.boundary.width - rects.preview.width - margin,
+    );
+    const maxTop = Math.max(
+      margin,
+      rects.boundary.height - rects.preview.height - margin,
+    );
     preview.style.right = "auto";
     preview.style.bottom = "auto";
     preview.style.left = `${Math.min(Math.max(left, margin), maxLeft)}px`;
@@ -74,12 +107,19 @@ function makePreviewDraggable(preview, boundary) {
   }
   function materializePosition() {
     const rects = dimensions();
-    place(rects.preview.left - rects.boundary.left, rects.preview.top - rects.boundary.top);
+    place(
+      rects.preview.left - rects.boundary.left,
+      rects.preview.top - rects.boundary.top,
+    );
   }
   function onPointerDown(event) {
     if (event.button !== undefined && event.button !== 0) return;
     const rects = dimensions();
-    drag = { pointerId: event.pointerId, offsetX: event.clientX - rects.preview.left, offsetY: event.clientY - rects.preview.top };
+    drag = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rects.preview.left,
+      offsetY: event.clientY - rects.preview.top,
+    };
     materializePosition();
     preview.classList.add("is-dragging");
     preview.setPointerCapture?.(event.pointerId);
@@ -88,7 +128,10 @@ function makePreviewDraggable(preview, boundary) {
   function onPointerMove(event) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     const boundaryRect = boundary.getBoundingClientRect();
-    place(event.clientX - boundaryRect.left - drag.offsetX, event.clientY - boundaryRect.top - drag.offsetY);
+    place(
+      event.clientX - boundaryRect.left - drag.offsetX,
+      event.clientY - boundaryRect.top - drag.offsetY,
+    );
   }
   function endDrag(event) {
     if (!drag || event.pointerId !== drag.pointerId) return;
@@ -97,15 +140,27 @@ function makePreviewDraggable(preview, boundary) {
     drag = null;
   }
   function onKeyDown(event) {
-    const directions = { ArrowLeft: [-12, 0], ArrowRight: [12, 0], ArrowUp: [0, -12], ArrowDown: [0, 12] };
+    const directions = {
+      ArrowLeft: [-12, 0],
+      ArrowRight: [12, 0],
+      ArrowUp: [0, -12],
+      ArrowDown: [0, 12],
+    };
     const movement = directions[event.key];
     if (!movement) return;
     if (!preview.style.left || !preview.style.top) materializePosition();
-    place(Number.parseFloat(preview.style.left) + movement[0], Number.parseFloat(preview.style.top) + movement[1]);
+    place(
+      Number.parseFloat(preview.style.left) + movement[0],
+      Number.parseFloat(preview.style.top) + movement[1],
+    );
     event.preventDefault();
   }
   function keepInsideScreen() {
-    if (preview.style.left && preview.style.top) place(Number.parseFloat(preview.style.left), Number.parseFloat(preview.style.top));
+    if (preview.style.left && preview.style.top)
+      place(
+        Number.parseFloat(preview.style.left),
+        Number.parseFloat(preview.style.top),
+      );
   }
   preview.addEventListener("pointerdown", onPointerDown);
   window.addEventListener("pointermove", onPointerMove);
@@ -121,27 +176,55 @@ function makePreviewDraggable(preview, boundary) {
   };
 }
 
-export function renderCallModal({ friendName, mode, onToggleMic, onToggleCamera, onToggleScreenShare = async () => false, canShareScreen = true, onHangup }) {
+export function renderCallModal({
+  friendName,
+  mode,
+  onToggleMic,
+  onToggleCamera,
+  onToggleScreenShare = async () => false,
+  canShareScreen = true,
+  screenShareUnavailableReason = "Демонстрация экрана недоступна",
+  onScreenShareUnavailable = () => {},
+  onHangup,
+}) {
   removeCallModal();
   const isVideo = mode === "video";
-  const initial = String(friendName?.[0]?.toUpperCase() || "?").replace(/[&<>"']/g, "");
-  document.body.insertAdjacentHTML("beforeend", `<div class="modal call-screen ${isVideo ? "video-call" : "audio-call"}" id="call-modal" role="dialog" aria-modal="true" aria-labelledby="call-peer-name" data-connection="connecting" data-local-screen-sharing="false" data-remote-screen-sharing="false"><div class="call-stage"><video id="remote-video" class="remote-video" autoplay playsinline></video><div class="call-audio-backdrop" aria-hidden="true"><span class="call-audio-avatar">${initial}</span></div></div><div class="call-shade" aria-hidden="true"></div><header class="call-header"><h2 id="call-peer-name">${String(friendName || "")}</h2><p><span class="connection-dot" aria-hidden="true"></span><span id="call-status">Соединение…</span> · ${isVideo ? "видео" : "аудио"}</p></header><div id="screen-share-status" class="screen-share-status" role="status" hidden><span class="screen-share-dot" aria-hidden="true"></span><span id="screen-share-status-text">Вы показываете экран</span></div>${isVideo ? `<div id="local-preview" class="local-preview" role="group" tabindex="0" aria-label="Ваше видео"><video id="local-video" autoplay muted playsinline></video><div class="local-preview-off" aria-hidden="true">${callControlIcon("camera")}<span>Камера выключена</span></div><span class="local-preview-grip" aria-hidden="true"></span></div>` : '<video id="local-video" class="audio-local-video" autoplay muted playsinline></video>'}<div class="controls" aria-label="Управление звонком"><button id="toggle-mic" class="media-control" type="button" data-enabled="true" aria-pressed="false" aria-label="Выключить микрофон"><span class="control-icon">${callControlIcon("microphone")}</span><span class="control-state" aria-hidden="true"></span></button>${isVideo ? `<button id="toggle-camera" class="media-control" type="button" data-enabled="true" aria-pressed="false" aria-label="Выключить камеру"><span class="control-icon">${callControlIcon("camera")}</span><span class="control-state" aria-hidden="true"></span></button><button id="toggle-screen-share" class="screen-share-control" type="button" data-active="false" aria-pressed="false" aria-label="${canShareScreen ? "Начать демонстрацию экрана" : "Демонстрация экрана недоступна"}" ${canShareScreen ? "" : "disabled"}><span class="control-icon">${callControlIcon("screen")}</span><span class="control-state" aria-hidden="true"></span></button>` : ""}<button id="hangup" class="danger hangup-control" type="button" aria-label="Завершить звонок"><span class="control-icon">${endCallIcon()}</span></button></div></div>`);
+  const safeName = escapeHtml(String(friendName || ""));
+  const initial = escapeHtml(String(friendName?.[0]?.toUpperCase() || "?"));
+  const unavailableReason = escapeHtml(screenShareUnavailableReason);
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `<div class="modal call-screen ${isVideo ? "video-call" : "audio-call"}" id="call-modal" role="dialog" aria-modal="true" aria-labelledby="call-peer-name" data-connection="connecting" data-local-screen-sharing="false" data-remote-screen-sharing="false"><div class="call-stage"><video id="remote-video" class="remote-video" autoplay playsinline aria-label="Видео собеседника"></video><div class="call-audio-backdrop" aria-hidden="true"><span class="call-audio-avatar">${initial}</span></div></div><div class="call-shade" aria-hidden="true"></div><header class="call-header"><h2 id="call-peer-name">${safeName}</h2><p><span class="connection-dot" aria-hidden="true"></span><span id="call-status">Соединение…</span> · ${isVideo ? "видео" : "аудио"}</p></header><div id="screen-share-status" class="screen-share-status" role="status" hidden><span class="screen-share-dot" aria-hidden="true"></span><span id="screen-share-status-text">Вы показываете экран</span></div>${isVideo ? `<div id="local-preview" class="local-preview" role="group" tabindex="0" aria-label="Ваше видео. Перетащите, чтобы изменить положение"><video id="local-video" autoplay muted playsinline></video><div class="local-preview-off" aria-hidden="true">${callControlIcon("camera")}<span>Камера выключена</span></div><span class="local-preview-grip" aria-hidden="true"></span></div>` : '<video id="local-video" class="audio-local-video" autoplay muted playsinline></video>'}<div class="controls" aria-label="Управление звонком"><button id="toggle-mic" class="media-control" type="button" data-enabled="true" aria-pressed="false" aria-label="Выключить микрофон"><span class="control-icon">${callControlIcon("microphone")}</span><span class="control-state" aria-hidden="true"></span></button>${isVideo ? `<button id="toggle-camera" class="media-control" type="button" data-enabled="true" aria-pressed="false" aria-label="Выключить камеру"><span class="control-icon">${callControlIcon("camera")}</span><span class="control-state" aria-hidden="true"></span></button><button id="toggle-screen-share" class="screen-share-control ${canShareScreen ? "" : "is-unavailable"}" type="button" data-active="false" aria-pressed="false" aria-disabled="${String(!canShareScreen)}" aria-label="${canShareScreen ? "Начать демонстрацию экрана" : unavailableReason}"><span class="control-icon">${callControlIcon("screen")}</span><span class="control-state" aria-hidden="true"></span></button>` : ""}<button id="hangup" class="danger hangup-control" type="button" aria-label="Завершить звонок"><span class="control-icon">${endCallIcon()}</span></button></div>${isVideo && !canShareScreen ? `<p class="screen-share-unavailable" role="note">${unavailableReason}</p>` : ""}</div>`,
+  );
   document.body.classList.add("call-active");
   const microphoneButton = query("#toggle-mic");
   const cameraButton = query("#toggle-camera");
   const screenShareButton = query("#toggle-screen-share");
   const localPreview = query("#local-preview");
-  microphoneButton?.addEventListener("click", () => setMediaControlState(microphoneButton, onToggleMic(), "microphone"));
-  cameraButton?.addEventListener("click", () => { const enabled = onToggleCamera(); setMediaControlState(cameraButton, enabled, "camera"); localPreview?.classList.toggle("is-camera-off", !enabled); });
-  if (canShareScreen) screenShareButton?.addEventListener("click", async () => {
-    if (screenShareButton.dataset.pending === "true") return;
-    screenShareButton.dataset.pending = "true";
-    screenShareButton.disabled = true;
-    try { setScreenShareActive(Boolean(await onToggleScreenShare())); }
-    finally { screenShareButton.dataset.pending = "false"; screenShareButton.disabled = false; }
+  microphoneButton?.addEventListener("click", () =>
+    setMediaControlState(microphoneButton, onToggleMic(), "microphone"),
+  );
+  cameraButton?.addEventListener("click", () => {
+    const enabled = onToggleCamera();
+    setMediaControlState(cameraButton, enabled, "camera");
+    localPreview?.classList.toggle("is-camera-off", !enabled);
   });
+  if (canShareScreen)
+    screenShareButton?.addEventListener("click", async () => {
+      if (screenShareButton.dataset.pending === "true") return;
+      screenShareButton.dataset.pending = "true";
+      screenShareButton.disabled = true;
+      try {
+        setScreenShareActive(Boolean(await onToggleScreenShare()));
+      } finally {
+        screenShareButton.dataset.pending = "false";
+        screenShareButton.disabled = false;
+      }
+    });
+  else screenShareButton?.addEventListener("click", onScreenShareUnavailable);
   query("#hangup")?.addEventListener("click", onHangup);
-  if (localPreview) callModalCleanup = makePreviewDraggable(localPreview, query("#call-modal"));
+  if (localPreview)
+    callModalCleanup = makePreviewDraggable(localPreview, query("#call-modal"));
 }
 
 export function removeCallModal() {

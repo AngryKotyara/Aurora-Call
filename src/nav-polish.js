@@ -3,11 +3,24 @@ function svg(path, name) {
 }
 
 const icons = {
-  home: svg('<path d="M4 10.5 12 4l8 6.5"/><path d="M6.5 9.5V20h11V9.5"/><path d="M9.5 20v-6h5v6"/>', "home"),
-  history: svg('<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>', "history"),
-  friends: svg('<circle cx="12" cy="8.5" r="3.25"/><path d="M5.5 20c.65-4 2.85-6 6.5-6s5.85 2 6.5 6"/>', "friends"),
-  chat: svg('<path d="M5 5.5A3.5 3.5 0 0 1 8.5 2h7A3.5 3.5 0 0 1 19 5.5v6a3.5 3.5 0 0 1-3.5 3.5H10l-5 4v-4.8A3.45 3.45 0 0 1 4 11.75V5.5z"/>', "chat"),
-  settings: '<span class="aurora-nav-icon aurora-settings-glyph" data-nav-icon="settings" aria-hidden="true">&#9881;&#xfe0e;</span>',
+  home: svg(
+    '<path d="M4 10.5 12 4l8 6.5"/><path d="M6.5 9.5V20h11V9.5"/><path d="M9.5 20v-6h5v6"/>',
+    "home",
+  ),
+  history: svg(
+    '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+    "history",
+  ),
+  friends: svg(
+    '<circle cx="12" cy="8.5" r="3.25"/><path d="M5.5 20c.65-4 2.85-6 6.5-6s5.85 2 6.5 6"/>',
+    "friends",
+  ),
+  chat: svg(
+    '<path d="M5 5.5A3.5 3.5 0 0 1 8.5 2h7A3.5 3.5 0 0 1 19 5.5v6a3.5 3.5 0 0 1-3.5 3.5H10l-5 4v-4.8A3.45 3.45 0 0 1 4 11.75V5.5z"/>',
+    "chat",
+  ),
+  settings:
+    '<span class="aurora-nav-icon aurora-settings-glyph" data-nav-icon="settings" aria-hidden="true">&#9881;&#xfe0e;</span>',
 };
 
 function ensureStyles() {
@@ -88,6 +101,10 @@ function scheduleRebuild() {
 export function installNavPolish() {
   rebuildNavigation();
   const root = document.getElementById("root");
-  if (root) new MutationObserver(scheduleRebuild).observe(root, { childList:true, subtree:true });
+  if (root)
+    new MutationObserver(scheduleRebuild).observe(root, {
+      childList: true,
+      subtree: true,
+    });
   document.addEventListener("aurora-chat-nav-ready", scheduleRebuild);
 }
