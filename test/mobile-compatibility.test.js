@@ -78,6 +78,15 @@ test("PWA and viewport metadata allow rotation, safe areas, and user zoom", () =
   assert.match(chatStyles, /\.chat-input,[\s\S]*font-size:\s*16px/);
 });
 
+test("authentication controls keep a mobile-sized password visibility target", () => {
+  const authScreen = readFileSync(
+    new URL("../src/auth-screen.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(authScreen, /\.auth-v2-eye\{[^}]*width:44px;[^}]*height:44px/);
+});
+
 test("native iOS wrapper keeps media permission, background audio, and atomic ReplayKit frames", () => {
   const viewController = readFileSync(
     new URL("../ios/AuroraCall/ViewController.swift", import.meta.url),
