@@ -12,11 +12,11 @@ globalThis.window = window;
 
 const {
   renderCallModal,
-  renderMain,
   removeCallModal,
   setRemoteScreenShareActive,
   setScreenShareActive,
-} = await import("../src/ui.js");
+} = await import("../src/call-ui.js");
+const { renderMain } = await import("../src/ui.js");
 
 test("main screen renders the logo, waves, history, and friend removal controls", () => {
   const navigation = [];
@@ -56,9 +56,9 @@ test("main screen renders the logo, waves, history, and friend removal controls"
 
   assert.match(
     document.querySelector(".brand-logo")?.getAttribute("src") || "",
-    /^data:image\/png;base64,/,
+    /aurora-call-logo\.png$/,
   );
-  assert.ok(document.querySelector(".aurora-waves svg"));
+  assert.ok(document.querySelector(".xperia-flow svg"));
   assert.equal(document.querySelectorAll("[data-nav]").length, 4);
   assert.match(document.querySelector(".history-row").textContent, /Входящий/);
   assert.match(document.querySelector(".history-row").textContent, /Отклонён/);
@@ -78,7 +78,7 @@ test("main screen renders the logo, waves, history, and friend removal controls"
   assert.equal(mediaRequests, 1);
 });
 
-test("granted media access is kept as a disabled status in settings", () => {
+test("granted media access can be switched off in settings", () => {
   renderMain({
     activeScreen: "settings",
     session: { username: "aurora_preview" },
@@ -95,8 +95,12 @@ test("granted media access is kept as a disabled status in settings", () => {
   });
 
   assert.equal(document.querySelectorAll("[data-request-media]").length, 1);
-  assert.equal(document.querySelector("[data-request-media]").disabled, true);
+  assert.equal(document.querySelector("[data-request-media]").disabled, false);
   assert.match(document.querySelector(".media-access").textContent, /сохранён/);
+  assert.match(
+    document.querySelector("[data-request-media]").textContent,
+    /Выключить/,
+  );
 });
 
 test("video calls use a full-screen stage with screen sharing controls", async () => {
@@ -254,8 +258,13 @@ test("unsupported browsers keep a disabled screen sharing button", () => {
   });
 
   const screenShareButton = document.querySelector("#toggle-screen-share");
-  assert.equal(screenShareButton.disabled, true);
+  assert.equal(screenShareButton.disabled, false);
+  assert.equal(screenShareButton.getAttribute("aria-disabled"), "true");
   assert.match(screenShareButton.getAttribute("aria-label"), /недоступна/);
+  assert.match(
+    document.querySelector(".screen-share-unavailable").textContent,
+    /недоступна/,
+  );
 
   removeCallModal();
 });

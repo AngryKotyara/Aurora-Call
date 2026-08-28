@@ -35,7 +35,10 @@ export async function compressMediaForUpload(file, onProgress = () => {}) {
     const { image, url } = await loadImage(file);
     onProgress(10);
 
-    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+    const scale = Math.min(
+      1,
+      MAX_IMAGE_EDGE / Math.max(image.naturalWidth, image.naturalHeight),
+    );
     const width = Math.max(1, Math.round(image.naturalWidth * scale));
     const height = Math.max(1, Math.round(image.naturalHeight * scale));
     const canvas = document.createElement("canvas");
@@ -49,7 +52,8 @@ export async function compressMediaForUpload(file, onProgress = () => {}) {
     URL.revokeObjectURL(url);
     onProgress(18);
 
-    const prefersAlpha = file.type === "image/png" || file.type === "image/webp";
+    const prefersAlpha =
+      file.type === "image/png" || file.type === "image/webp";
     let type = prefersAlpha ? "image/webp" : "image/jpeg";
     let blob = await canvasToBlob(canvas, type, IMAGE_QUALITY);
     if (!blob) {

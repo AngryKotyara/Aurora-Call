@@ -20,7 +20,9 @@ function base64ToBlobUrl(base64, mime) {
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
     parts.push(bytes);
   }
-  return URL.createObjectURL(new Blob(parts, { type: mime || "application/octet-stream" }));
+  return URL.createObjectURL(
+    new Blob(parts, { type: mime || "application/octet-stream" }),
+  );
 }
 
 async function fetchMedia(messageId) {
@@ -49,7 +51,11 @@ async function fetchMedia(messageId) {
     if (!row?.media_base64) throw new Error("media_not_found");
 
     const url = base64ToBlobUrl(row.media_base64, row.media_mime);
-    const value = { url, mime: row.media_mime || "", name: row.media_name || "Медиафайл" };
+    const value = {
+      url,
+      mime: row.media_mime || "",
+      name: row.media_name || "Медиафайл",
+    };
     resolved.set(messageId, value);
     return value;
   })().finally(() => pending.delete(messageId));
@@ -66,7 +72,8 @@ function finishImage(frame, image, skeleton, media) {
     frame.classList.add("is-loaded");
   };
   image.onerror = () => {
-    if (skeleton) skeleton.querySelector("small").textContent = "Формат не поддерживается";
+    if (skeleton)
+      skeleton.querySelector("small").textContent = "Формат не поддерживается";
   };
   image.src = media.url;
   frame.onclick = () => {
@@ -77,7 +84,8 @@ function finishImage(frame, image, skeleton, media) {
     viewer.setAttribute("aria-modal", "true");
     viewer.innerHTML = `<button class="chat-viewer-close" aria-label="Закрыть">×</button><img src="${frame.dataset.mediaSrc}" alt="Просмотр фото">`;
     viewer.addEventListener("click", (event) => {
-      if (event.target === viewer || event.target.closest(".chat-viewer-close")) viewer.remove();
+      if (event.target === viewer || event.target.closest(".chat-viewer-close"))
+        viewer.remove();
     });
     document.body.append(viewer);
   };
@@ -90,14 +98,19 @@ function finishVideo(frame, video, skeleton, media) {
     frame.classList.add("is-loaded");
   };
   video.onerror = () => {
-    if (skeleton) skeleton.querySelector("small").textContent = "Формат не поддерживается";
+    if (skeleton)
+      skeleton.querySelector("small").textContent = "Формат не поддерживается";
   };
   video.src = media.url;
   video.load();
 }
 
 async function hydrate(frame) {
-  if (frame.dataset.blobHydrated === "true" || frame.dataset.blobHydrating === "true") return;
+  if (
+    frame.dataset.blobHydrated === "true" ||
+    frame.dataset.blobHydrating === "true"
+  )
+    return;
   if (frame.dataset.directSrc) return;
   const id = frame.dataset.chatMediaId;
   if (!id) return;
@@ -114,7 +127,8 @@ async function hydrate(frame) {
   } catch (error) {
     console.error("Aurora media hydration failed", error);
     const label = frame.querySelector(".chat-media-skeleton small");
-    if (label) label.textContent = "Не удалось загрузить — нажмите, чтобы повторить";
+    if (label)
+      label.textContent = "Не удалось загрузить — нажмите, чтобы повторить";
     frame.onclick = () => {
       frame.dataset.blobHydrating = "false";
       delete frame.dataset.blobHydrated;
@@ -126,7 +140,9 @@ async function hydrate(frame) {
 }
 
 function scan() {
-  document.querySelectorAll("#chat-layer [data-chat-media-id]").forEach((frame) => void hydrate(frame));
+  document
+    .querySelectorAll("#chat-layer [data-chat-media-id]")
+    .forEach((frame) => void hydrate(frame));
 }
 
 const observer = new MutationObserver(scan);

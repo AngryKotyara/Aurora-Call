@@ -52,6 +52,9 @@ const screenStream = {
   getVideoTracks: () => [screenTrack],
 };
 let displayMediaConstraints = null;
+const rpcRequests = [];
+let incomingCalls = [];
+let polledSignals = [];
 
 globalThis.document = document;
 globalThis.window = window;
@@ -72,14 +75,47 @@ Object.defineProperty(globalThis, "navigator", {
     },
   },
 });
-globalThis.fetch = async () => ({
-  ok: true,
-  text: async () => "",
-});
+globalThis.fetch = async (url, options = {}) => {
+  const functionName = String(url).split("/").pop();
+  if (options.body) {
+    rpcRequests.push({ functionName, body: JSON.parse(options.body) });
+  }
+  const result =
+    functionName === "start_call"
+      ? "00000000-0000-4000-8000-0000000000c1"
+      : functionName === "poll_incoming_calls"
+        ? incomingCalls
+        : functionName === "poll_call_signals"
+          ? polledSignals
+          : true;
+  return {
+    ok: true,
+    text: async () => JSON.stringify(result),
+  };
+};
+
+class MediaStreamMock {
+  tracks = [];
+
+  addTrack(track) {
+    this.tracks.push(track);
+  }
+
+  getTracks() {
+    return this.tracks;
+  }
+}
+
+globalThis.MediaStream = MediaStreamMock;
 
 class PeerConnectionMock {
   connectionState = "connecting";
   senders = [];
+
+  constructor(configuration) {
+    this.configuration = configuration;
+    PeerConnectionMock.lastConfiguration = configuration;
+  }
 
   addTrack(track) {
     const sender = {
@@ -106,6 +142,18 @@ class PeerConnectionMock {
     this.localDescription = description;
   }
 
+  async setRemoteDescription(description) {
+    this.remoteDescription = description;
+  }
+
+  async createAnswer() {
+    return { type: "answer", sdp: "test-answer" };
+  }
+
+  async addIceCandidate(candidate) {
+    this.iceCandidate = candidate;
+  }
+
   close() {
     this.connectionState = "closed";
   }
@@ -113,7 +161,8 @@ class PeerConnectionMock {
 
 globalThis.RTCPeerConnection = PeerConnectionMock;
 
-const { endCall, startCall } = await import("../src/calls.js");
+const { hangupCall, pollSignalsOnce, startCall } =
+  await import("../src/calls.js");
 const { state } = await import("../src/state.js");
 
 test("call controls update media tracks and restore the camera after screen sharing", async () => {
@@ -124,6 +173,10 @@ test("call controls update media tracks and restore the camera after screen shar
   };
 
   await startCall("video");
+
+  assert.deepEqual(PeerConnectionMock.lastConfiguration, {
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  });
 
   const microphoneButton = document.querySelector("#toggle-mic");
   const cameraButton = document.querySelector("#toggle-camera");
@@ -149,6 +202,18 @@ test("call controls update media tracks and restore the camera after screen shar
   assert.equal(videoTrack.enabled, true);
   assert.equal(microphoneButton.dataset.enabled, "true");
   assert.equal(cameraButton.dataset.enabled, "true");
+
+  state.peer.onicecandidate({
+    candidate: { toJSON: () => ({ candidate: "test-ice" }) },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(
+    rpcRequests.some(
+      (request) =>
+        request.functionName === "send_call_signal" &&
+        request.body.p_kind === "ice",
+    ),
+  );
 
   screenShareButton.click();
   await new Promise((resolve) => setImmediate(resolve));
@@ -177,11 +242,96 @@ test("call controls update media tracks and restore the camera after screen shar
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(state.screenStream, screenStream);
 
-  await endCall({ notifyPeer: false });
+  await hangupCall();
   assert.equal(audioTrack.stopCalled, true);
   assert.equal(videoTrack.stopCalled, true);
   assert.equal(screenTrack.stopCalled, true);
   assert.equal(state.screenStream, null);
   assert.equal(state.videoSender, null);
   assert.equal(document.querySelector("#call-modal"), null);
+});
+
+test("signals use the backend cursor and an early offer is handled after accepting", async () => {
+  state.lastSignalId = 0;
+  state.session = { token: "receiver-token", username: "volna_preview" };
+  incomingCalls = [
+    {
+      id: "00000000-0000-4000-8000-0000000000c2",
+      from_id: "00000000-0000-4000-8000-0000000000e5",
+      from_name: "aurora_preview",
+      mode: "video",
+    },
+  ];
+  polledSignals = [
+    {
+      id: 42,
+      call_id: "00000000-0000-4000-8000-0000000000c2",
+      kind: "offer",
+      payload: { type: "offer", sdp: "early-offer" },
+    },
+  ];
+
+  await pollSignalsOnce();
+
+  const pollRequest = rpcRequests.find(
+    (request) => request.functionName === "poll_call_signals",
+  );
+  assert.equal(pollRequest.body.p_after, 0);
+  assert.equal(state.lastSignalId, 42);
+  assert.ok(document.querySelector("#incoming-call-layer"));
+
+  document.querySelector("[data-incoming-accept]").click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.deepEqual(state.peer.remoteDescription, {
+    type: "offer",
+    sdp: "early-offer",
+  });
+  assert.ok(
+    rpcRequests.some(
+      (request) =>
+        request.functionName === "answer_call" &&
+        request.body.p_accept === true,
+    ),
+  );
+  assert.ok(
+    rpcRequests.some(
+      (request) =>
+        request.functionName === "send_call_signal" &&
+        request.body.p_kind === "answer",
+    ),
+  );
+
+  incomingCalls = [];
+  polledSignals = [];
+  await hangupCall();
+});
+
+test("a remote hangup dismisses an unanswered incoming call", async () => {
+  const callId = "00000000-0000-4000-8000-0000000000c3";
+  state.session = { token: "receiver-token", username: "volna_preview" };
+  incomingCalls = [
+    {
+      id: callId,
+      from_id: "00000000-0000-4000-8000-0000000000e5",
+      from_name: "aurora_preview",
+      mode: "audio",
+    },
+  ];
+  polledSignals = [
+    {
+      id: 43,
+      call_id: callId,
+      kind: "hangup",
+      payload: {},
+    },
+  ];
+
+  await pollSignalsOnce();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(document.querySelector("#incoming-call-layer"), null);
+  assert.equal(state.callId, null);
+  incomingCalls = [];
+  polledSignals = [];
 });

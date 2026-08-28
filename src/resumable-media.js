@@ -3,7 +3,8 @@ import { rpc } from "./api.js";
 import { state } from "./state.js";
 import { escapeHtml, showToast } from "./utils.js";
 
-const EDGE_URL = "https://taqpirplpmjihmkztwlv.supabase.co/functions/v1/aurora-chat-media";
+const EDGE_URL =
+  "https://taqpirplpmjihmkztwlv.supabase.co/functions/v1/aurora-chat-media";
 const CHUNK_SIZE = 6 * 1024 * 1024;
 const MAX_BYTES = 1024 * 1024 * 1024;
 const RETRIES = [0, 1000, 3000, 5000, 10000, 20000];
@@ -17,12 +18,21 @@ function rememberFriend(id, name = "") {
   activeFriend = { id: String(id), name: String(name || "") };
 }
 
-document.addEventListener("click", (event) => {
-  const thread = event.target.closest?.("[data-chat-friend]");
-  if (thread) rememberFriend(thread.dataset.chatFriend, thread.dataset.chatName);
-  const button = event.target.closest?.("[data-message-friend]");
-  if (button) rememberFriend(button.dataset.messageFriend, button.getAttribute("aria-label")?.replace(/^Написать\s+/, "") || "");
-}, true);
+document.addEventListener(
+  "click",
+  (event) => {
+    const thread = event.target.closest?.("[data-chat-friend]");
+    if (thread)
+      rememberFriend(thread.dataset.chatFriend, thread.dataset.chatName);
+    const button = event.target.closest?.("[data-message-friend]");
+    if (button)
+      rememberFriend(
+        button.dataset.messageFriend,
+        button.getAttribute("aria-label")?.replace(/^Написать\s+/, "") || "",
+      );
+  },
+  true,
+);
 
 document.addEventListener("aurora-chat-open", (event) => {
   rememberFriend(event.detail?.id, event.detail?.name);
@@ -41,7 +51,9 @@ function metadata(ticket, file) {
     ["objectName", ticket.path],
     ["contentType", file.type || "application/octet-stream"],
     ["cacheControl", "3600"],
-  ].map(([key, value]) => `${key} ${b64(value)}`).join(",");
+  ]
+    .map(([key, value]) => `${key} ${b64(value)}`)
+    .join(",");
 }
 
 async function edge(body) {
@@ -54,7 +66,8 @@ async function edge(body) {
     body: JSON.stringify(body),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.ok) throw new Error(payload?.error || `edge_${response.status}`);
+  if (!response.ok || !payload?.ok)
+    throw new Error(payload?.error || `edge_${response.status}`);
   return payload;
 }
 
@@ -101,7 +114,9 @@ async function createTusUpload(file, ticket) {
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`tus_create_${response.status}${text ? `:${text.slice(0, 180)}` : ""}`);
+    throw new Error(
+      `tus_create_${response.status}${text ? `:${text.slice(0, 180)}` : ""}`,
+    );
   }
   const location = response.headers.get("Location");
   if (!location) throw new Error("tus_missing_location");
@@ -119,9 +134,11 @@ async function patchChunk(url, ticket, blob, offset) {
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`tus_patch_${response.status}${text ? `:${text.slice(0, 180)}` : ""}`);
+    throw new Error(
+      `tus_patch_${response.status}${text ? `:${text.slice(0, 180)}` : ""}`,
+    );
   }
-  return Number(response.headers.get("Upload-Offset") || (offset + blob.size));
+  return Number(response.headers.get("Upload-Offset") || offset + blob.size);
 }
 
 function fingerprint(file, friend) {
@@ -131,7 +148,9 @@ function fingerprint(file, friend) {
 async function resumableUpload(file, friend, onProgress) {
   const key = fingerprint(file, friend);
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(key) || "null"); } catch {}
+  try {
+    saved = JSON.parse(localStorage.getItem(key) || "null");
+  } catch {}
 
   let ticket = null;
   let uploadUrl = "";
@@ -172,7 +191,9 @@ async function resumableUpload(file, friend, onProgress) {
         break;
       } catch (error) {
         lastError = error;
-        try { offset = await headOffset(uploadUrl, ticket); } catch {}
+        try {
+          offset = await headOffset(uploadUrl, ticket);
+        } catch {}
         if (offset >= end) {
           completed = true;
           break;
@@ -181,7 +202,9 @@ async function resumableUpload(file, friend, onProgress) {
     }
 
     if (!completed) throw lastError || new Error("upload_failed");
-    onProgress(Math.min(96, Math.max(1, Math.round((offset / file.size) * 96))));
+    onProgress(
+      Math.min(96, Math.max(1, Math.round((offset / file.size) * 96))),
+    );
   }
 
   return { ticket, key };
@@ -245,7 +268,9 @@ export async function handleResumableMedia(file) {
     return;
   }
   const isImage = file.type.startsWith("image/");
-  const isVideo = file.type.startsWith("video/") || /\.(mov|mp4|m4v|webm)$/i.test(file.name || "");
+  const isVideo =
+    file.type.startsWith("video/") ||
+    /\.(mov|mp4|m4v|webm)$/i.test(file.name || "");
   if (!(isImage || isVideo)) {
     showToast("Можно отправлять фото и видео");
     return;
@@ -257,7 +282,9 @@ export async function handleResumableMedia(file) {
 
   const ui = createUploadBubble(file);
   try {
-    const { ticket, key } = await resumableUpload(file, friend, (value) => ui.update(value));
+    const { ticket, key } = await resumableUpload(file, friend, (value) =>
+      ui.update(value),
+    );
     ui.update(97, "Сохраняем сообщение…");
     await finalizeMessage(file, friend, ticket);
     localStorage.removeItem(key);
@@ -271,15 +298,28 @@ export async function handleResumableMedia(file) {
     ui.article.classList.add("is-failed");
     const ring = ui.article.querySelector(".chat-upload-ring b");
     const current = Number.parseInt(ring?.textContent || "0", 10) || 0;
-    ui.update(current, current >= 96 ? "Не удалось сохранить сообщение — повторите файл" : `Ошибка загрузки${error?.message ? ` (${String(error.message).slice(0, 32)})` : ""} — повторите файл`);
-    showToast(current >= 96 ? "Видео загружено. Выберите тот же файл ещё раз — повторно загружать его не придётся." : "Не удалось отправить файл. Повторная попытка продолжит загрузку.");
+    ui.update(
+      current,
+      current >= 96
+        ? "Не удалось сохранить сообщение — повторите файл"
+        : `Ошибка загрузки${error?.message ? ` (${String(error.message).slice(0, 32)})` : ""} — повторите файл`,
+    );
+    showToast(
+      current >= 96
+        ? "Видео загружено. Выберите тот же файл ещё раз — повторно загружать его не придётся."
+        : "Не удалось отправить файл. Повторная попытка продолжит загрузку.",
+    );
   } finally {
     URL.revokeObjectURL(ui.preview);
   }
 }
 
 function bindInput(input) {
-  if (!(input instanceof HTMLInputElement) || !input.classList.contains("chat-file")) return;
+  if (
+    !(input instanceof HTMLInputElement) ||
+    !input.classList.contains("chat-file")
+  )
+    return;
   if (input.dataset.resumableBound === "true") return;
   input.dataset.resumableBound = "true";
   input.onchange = (event) => {
@@ -296,18 +336,29 @@ function bindInputs() {
   document.querySelectorAll("input.chat-file").forEach(bindInput);
 }
 
-document.addEventListener("change", (event) => {
-  const input = event.target;
-  if (!(input instanceof HTMLInputElement) || !input.classList.contains("chat-file")) return;
-  const file = input.files?.[0];
-  if (!file) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  void handleResumableMedia(file);
-  input.value = "";
-}, true);
+document.addEventListener(
+  "change",
+  (event) => {
+    const input = event.target;
+    if (
+      !(input instanceof HTMLInputElement) ||
+      !input.classList.contains("chat-file")
+    )
+      return;
+    const file = input.files?.[0];
+    if (!file) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void handleResumableMedia(file);
+    input.value = "";
+  },
+  true,
+);
 
 bindInputs();
 inputObserver = new MutationObserver(bindInputs);
-inputObserver.observe(document.documentElement, { childList: true, subtree: true });
+inputObserver.observe(document.documentElement, {
+  childList: true,
+  subtree: true,
+});
 window.auroraHandleResumableMedia = handleResumableMedia;

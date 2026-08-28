@@ -17,7 +17,7 @@ export const state = {
   friends: [],
   callHistory: [],
   selectedFriend: null,
-  peerConnection: null,
+  peer: null,
   mediaStream: null,
   videoSender: null,
   screenStream: null,

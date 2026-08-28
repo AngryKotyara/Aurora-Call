@@ -2,6 +2,9 @@ let audioContext = null;
 let ringInterval = null;
 let vibrationInterval = null;
 let confirmInstalled = false;
+let activeIncomingCallId = null;
+let activeIncomingCallPromise = null;
+let activeIncomingFinish = null;
 
 function tone(frequency, startsAt, duration, gainValue = 0.055) {
   if (!audioContext) return;
@@ -34,7 +37,9 @@ function playRingPhrase() {
 function vibrate() {
   try {
     navigator.vibrate?.([450, 180, 450, 900]);
-    window.webkit?.messageHandlers?.auroraHaptics?.postMessage?.({ type: "incoming-call" });
+    window.webkit?.messageHandlers?.auroraHaptics?.postMessage?.({
+      type: "incoming-call",
+    });
   } catch {
     // Haptics are best-effort across browser and native shells.
   }
@@ -53,7 +58,9 @@ export function stopIncomingCallAlert() {
   if (vibrationInterval) window.clearInterval(vibrationInterval);
   ringInterval = null;
   vibrationInterval = null;
-  try { navigator.vibrate?.(0); } catch {}
+  try {
+    navigator.vibrate?.(0);
+  } catch {}
 }
 
 export function installIncomingCallAlerting() {
@@ -74,9 +81,19 @@ export function installIncomingCallAlerting() {
   };
 }
 
-export function showIncomingCall({ name, mode = "audio" }) {
+export function showIncomingCall(
+  call,
+  { onAccept = async () => {}, onDecline = async () => {} } = {},
+) {
+  const { id = null, from_name: fromName, name, mode = "audio" } = call || {};
+  const displayName = fromName || name || "Входящий звонок";
+  if (activeIncomingCallPromise) return activeIncomingCallPromise;
+
+  activeIncomingCallId = id;
   document.querySelector("#incoming-call-layer")?.remove();
-  const initial = String(name || "?").slice(0, 1).toUpperCase();
+  const initial = String(displayName || "?")
+    .slice(0, 1)
+    .toUpperCase();
   const layer = document.createElement("div");
   layer.id = "incoming-call-layer";
   layer.className = "incoming-call-layer";
@@ -89,17 +106,47 @@ export function showIncomingCall({ name, mode = "audio" }) {
     <div class="incoming-call-labels"><span>Отклонить</span><span>Принять</span></div>
   </div>`;
   layer.querySelector(".incoming-call-avatar").textContent = initial;
-  layer.querySelector("h2").textContent = String(name || "Входящий звонок");
+  layer.dataset.callId = String(id || "");
+  layer.querySelector("h2").textContent = String(displayName);
   document.body.append(layer);
   startAlerting();
 
-  return new Promise((resolve) => {
-    const finish = (accepted) => {
+  activeIncomingCallPromise = new Promise((resolve) => {
+    let finishing = false;
+    const finish = async (accepted, runAction = true) => {
+      if (finishing) return;
+      finishing = true;
       stopIncomingCallAlert();
       layer.remove();
-      resolve(accepted);
+      try {
+        if (runAction) await (accepted ? onAccept(call) : onDecline(call));
+        resolve(accepted);
+      } catch (error) {
+        console.error("incoming call action failed", error);
+        resolve(false);
+      } finally {
+        if (activeIncomingCallId === id) {
+          activeIncomingCallId = null;
+          activeIncomingCallPromise = null;
+          activeIncomingFinish = null;
+        }
+      }
     };
-    layer.querySelector("[data-incoming-accept]").addEventListener("click", () => finish(true), { once: true });
-    layer.querySelector("[data-incoming-decline]").addEventListener("click", () => finish(false), { once: true });
+    activeIncomingFinish = finish;
+    layer
+      .querySelector("[data-incoming-accept]")
+      .addEventListener("click", () => void finish(true), { once: true });
+    layer
+      .querySelector("[data-incoming-decline]")
+      .addEventListener("click", () => void finish(false), { once: true });
   });
+  return activeIncomingCallPromise;
+}
+
+export function dismissIncomingCall(callId = null) {
+  if (!activeIncomingCallPromise) return false;
+  if (callId != null && String(activeIncomingCallId || "") !== String(callId))
+    return false;
+  void activeIncomingFinish?.(false, false);
+  return true;
 }

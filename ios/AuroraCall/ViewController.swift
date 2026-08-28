@@ -1,11 +1,12 @@
 import UIKit
 import WebKit
 
-final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
+final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
     private var webView: WKWebView!
     private var frameTimer: Timer?
     private var lastFrameModificationDate: Date?
     private var lastStatus: String?
+    private var trustedWebHost: String?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -21,6 +22,7 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
 
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         view.addSubview(webView)
@@ -38,6 +40,7 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
             : "https://aurora-call.vercel.app"
 
         guard let url = URL(string: urlString) else { return }
+        trustedWebHost = url.host?.lowercased()
         webView.load(URLRequest(url: url))
 
         frameTimer = Timer.scheduledTimer(
@@ -73,6 +76,19 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
         default:
             break
         }
+    }
+
+    @available(iOS 15.0, *)
+    func webView(
+        _ webView: WKWebView,
+        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        let isTrustedOrigin = origin.protocol.lowercased() == "https"
+            && origin.host.lowercased() == trustedWebHost
+        decisionHandler(isTrustedOrigin ? .grant : .prompt)
     }
 
     @objc private func relayReplayKitFrame() {

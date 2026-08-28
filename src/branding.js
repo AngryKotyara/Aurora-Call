@@ -1,6 +1,4 @@
-import { logoUrl } from "./branding-data.js";
-
-export { logoUrl };
+export const logoUrl = "/aurora-call-logo.png";
 
 export function applyBranding() {
   document.querySelector("#app-icon")?.setAttribute("href", logoUrl);

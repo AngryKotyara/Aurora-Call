@@ -1,4 +1,4 @@
-const CACHE = "aurora-shell-v3";
+const CACHE = "aurora-shell-v5";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -10,7 +10,11 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) =>
+        Promise.all(
+          keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)),
+        ),
+      )
       .then(() => self.clients.claim()),
   );
 });
@@ -24,7 +28,10 @@ async function networkFirst(request, fallback) {
     }
     return response;
   } catch {
-    return (await caches.match(request)) || (fallback ? await caches.match(fallback) : Response.error());
+    return (
+      (await caches.match(request)) ||
+      (fallback ? await caches.match(fallback) : Response.error())
+    );
   }
 }
 
@@ -68,7 +75,10 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data?.json() || {};
   } catch {
-    payload = { title: "Aurora Call", body: event.data?.text() || "Новое событие" };
+    payload = {
+      title: "Aurora Call",
+      body: event.data?.text() || "Новое событие",
+    };
   }
   const title = payload.title || "Aurora Call";
   const options = {
@@ -76,8 +86,8 @@ self.addEventListener("push", (event) => {
     tag: payload.tag || `aurora-${Date.now()}`,
     renotify: payload.type === "call",
     requireInteraction: payload.type === "call",
-    icon: "/src/assets/aurora-call-logo.png",
-    badge: "/src/assets/aurora-call-logo.png",
+    icon: "/aurora-call-logo.png",
+    badge: "/aurora-call-logo.png",
     data: {
       url: payload.url || "/",
       type: payload.type || "generic",
@@ -90,15 +100,23 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = new URL(event.notification.data?.url || "/", self.location.origin).href;
-  event.waitUntil((async () => {
-    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const client of windows) {
-      if (new URL(client.url).origin !== self.location.origin) continue;
-      await client.focus();
-      client.postMessage({ type: "aurora-push-open", url: target });
-      return;
-    }
-    await self.clients.openWindow(target);
-  })());
+  const target = new URL(
+    event.notification.data?.url || "/",
+    self.location.origin,
+  ).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of windows) {
+        if (new URL(client.url).origin !== self.location.origin) continue;
+        await client.focus();
+        client.postMessage({ type: "aurora-push-open", url: target });
+        return;
+      }
+      await self.clients.openWindow(target);
+    })(),
+  );
 });

@@ -23,4 +23,8 @@ function polishHomeButtons() {
 
 polishHomeButtons();
 const root = document.getElementById("root");
-if (root) new MutationObserver(polishHomeButtons).observe(root, { childList: true, subtree: true });
+if (root)
+  new MutationObserver(polishHomeButtons).observe(root, {
+    childList: true,
+    subtree: true,
+  });

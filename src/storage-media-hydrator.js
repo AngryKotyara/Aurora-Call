@@ -1,7 +1,8 @@
 import { config } from "./config.js";
 import { state } from "./state.js";
 
-const EDGE_URL = "https://taqpirplpmjihmkztwlv.supabase.co/functions/v1/aurora-chat-media";
+const EDGE_URL =
+  "https://taqpirplpmjihmkztwlv.supabase.co/functions/v1/aurora-chat-media";
 const STORAGE_MESSAGE_START_ID = 11;
 const cache = new Map();
 const pending = new Map();
@@ -23,7 +24,8 @@ async function getSignedUrl(messageId) {
       }),
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload?.ok || !payload?.url) throw new Error(payload?.error || `download_${response.status}`);
+    if (!response.ok || !payload?.ok || !payload?.url)
+      throw new Error(payload?.error || `download_${response.status}`);
     cache.set(messageId, payload.url);
     return payload.url;
   })().finally(() => pending.delete(messageId));
@@ -46,7 +48,11 @@ function showImage(frame, url) {
       viewer.setAttribute("aria-modal", "true");
       viewer.innerHTML = `<button class="chat-viewer-close" aria-label="Закрыть">×</button><img src="${url}" alt="Просмотр фото">`;
       viewer.onclick = (event) => {
-        if (event.target === viewer || event.target.closest(".chat-viewer-close")) viewer.remove();
+        if (
+          event.target === viewer ||
+          event.target.closest(".chat-viewer-close")
+        )
+          viewer.remove();
       };
       document.body.append(viewer);
     };
@@ -68,7 +74,13 @@ function showVideo(frame, url) {
 
 async function hydrate(frame) {
   const id = Number(frame.dataset.chatMediaId || 0);
-  if (!id || id < STORAGE_MESSAGE_START_ID || frame.dataset.storageHydrating === "true" || frame.dataset.storageHydrated === "true") return;
+  if (
+    !id ||
+    id < STORAGE_MESSAGE_START_ID ||
+    frame.dataset.storageHydrating === "true" ||
+    frame.dataset.storageHydrated === "true"
+  )
+    return;
   frame.dataset.storageHydrating = "true";
   try {
     const url = await getSignedUrl(id);
@@ -86,7 +98,9 @@ async function hydrate(frame) {
 }
 
 function scan() {
-  document.querySelectorAll("#chat-layer [data-chat-media-id]").forEach((frame) => void hydrate(frame));
+  document
+    .querySelectorAll("#chat-layer [data-chat-media-id]")
+    .forEach((frame) => void hydrate(frame));
 }
 
 const observer = new MutationObserver(scan);

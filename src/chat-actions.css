@@ -1,1 +1,63 @@
-.message-friend{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:8px 10px;border:1px solid rgba(118,132,255,.25);border-radius:12px;background:rgba(87,103,225,.12);color:#cbd2ff;font-size:12px;font-weight:750;white-space:nowrap}.message-friend:hover{background:rgba(99,116,255,.22);color:#fff}.message-friend svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.chat-bubble.is-sending{opacity:.72}.chat-bubble.is-sending .chat-message-meta{font-style:italic}.friend-row .message-friend{margin-left:auto}.friend-row .message-friend+ .delete-friend{margin-left:0}@media(max-width:430px){.card[data-select] .message-friend span{display:none}.card[data-select] .message-friend{width:40px;height:40px;padding:0;justify-content:center;border-radius:13px}.friend-row{flex-wrap:wrap}.friend-row .grow{min-width:120px}.friend-row .message-friend{margin-left:62px}.friend-row .delete-friend{margin-left:auto}}
+.message-friend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(118, 132, 255, 0.25);
+  border-radius: 12px;
+  background: rgba(87, 103, 225, 0.12);
+  color: #cbd2ff;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.message-friend:hover {
+  background: rgba(99, 116, 255, 0.22);
+  color: #fff;
+}
+.message-friend svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chat-bubble.is-sending {
+  opacity: 0.72;
+}
+.chat-bubble.is-sending .chat-message-meta {
+  font-style: italic;
+}
+.friend-row .message-friend {
+  margin-left: auto;
+}
+.friend-row .message-friend + .delete-friend {
+  margin-left: 0;
+}
+@media (max-width: 430px) {
+  .card[data-select] .message-friend span {
+    display: none;
+  }
+  .card[data-select] .message-friend {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 13px;
+  }
+  .friend-row {
+    flex-wrap: wrap;
+  }
+  .friend-row .grow {
+    min-width: 120px;
+  }
+  .friend-row .message-friend {
+    margin-left: 62px;
+  }
+  .friend-row .delete-friend {
+    margin-left: auto;
+  }
+}

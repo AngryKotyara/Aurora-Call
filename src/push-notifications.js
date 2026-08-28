@@ -2,7 +2,8 @@ import { config } from "./config.js";
 import { state } from "./state.js";
 import { showToast } from "./utils.js";
 
-const VAPID_PUBLIC_KEY = "BMNFI7gc9X-oOOTXoFTRW2oulzz68swL5TOTK5g6EIR_svfw8BHXLG1u3sSMPaj_fxQ2B2XDpPP7jj4qO86chDU";
+const VAPID_PUBLIC_KEY =
+  "BMNFI7gc9X-oOOTXoFTRW2oulzz68swL5TOTK5g6EIR_svfw8BHXLG1u3sSMPaj_fxQ2B2XDpPP7jj4qO86chDU";
 let syncInFlight = null;
 
 function base64UrlToUint8Array(value) {
@@ -13,11 +14,18 @@ function base64UrlToUint8Array(value) {
 }
 
 function isStandalone() {
-  return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+  return (
+    window.matchMedia?.("(display-mode: standalone)")?.matches ||
+    window.navigator.standalone === true
+  );
 }
 
 function supported() {
-  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  return (
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window
+  );
 }
 
 async function pushApi(body) {
@@ -31,7 +39,10 @@ async function pushApi(body) {
     },
     body: JSON.stringify({ ...body, p_token: state.session.token }),
   });
-  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || "push_request_failed");
+  if (!response.ok)
+    throw new Error(
+      (await response.json().catch(() => null))?.error || "push_request_failed",
+    );
   return response.json().catch(() => ({}));
 }
 
@@ -40,7 +51,12 @@ async function getRegistration() {
 }
 
 async function ensureSubscription() {
-  if (!supported() || Notification.permission !== "granted" || !state.session?.token) return null;
+  if (
+    !supported() ||
+    Notification.permission !== "granted" ||
+    !state.session?.token
+  )
+    return null;
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
     const registration = await getRegistration();
@@ -51,9 +67,15 @@ async function ensureSubscription() {
         applicationServerKey: base64UrlToUint8Array(VAPID_PUBLIC_KEY),
       });
     }
-    await pushApi({ action: "subscribe", subscription: subscription.toJSON(), user_agent: navigator.userAgent });
+    await pushApi({
+      action: "subscribe",
+      subscription: subscription.toJSON(),
+      user_agent: navigator.userAgent,
+    });
     return subscription;
-  })().finally(() => { syncInFlight = null; });
+  })().finally(() => {
+    syncInFlight = null;
+  });
   return syncInFlight;
 }
 
@@ -66,7 +88,10 @@ async function enableNotifications() {
     showToast("На iPhone сначала добавьте Aurora Call на экран «Домой»");
     return;
   }
-  const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+  const permission =
+    Notification.permission === "granted"
+      ? "granted"
+      : await Notification.requestPermission();
   if (permission !== "granted") {
     showToast("Разрешение на уведомления не выдано");
     renderPushCard();
@@ -88,7 +113,10 @@ async function disableNotifications() {
     const registration = await getRegistration();
     const subscription = await registration.pushManager.getSubscription();
     if (subscription) {
-      await pushApi({ action: "unsubscribe", endpoint: subscription.endpoint }).catch(() => {});
+      await pushApi({
+        action: "unsubscribe",
+        endpoint: subscription.endpoint,
+      }).catch(() => {});
       await subscription.unsubscribe();
     }
     showToast("Фоновые уведомления выключены", true);
@@ -100,23 +128,57 @@ async function disableNotifications() {
 }
 
 function cardCopy() {
-  if (!supported()) return { title: "Фоновые уведомления недоступны", text: "Этот браузер не поддерживает Web Push.", action: "Недоступно", disabled: true };
-  if (!isStandalone() && /iPad|iPhone|iPod/.test(navigator.userAgent)) return { title: "Уведомления о звонках и сообщениях", text: "Добавьте Aurora Call на экран «Домой», затем включите уведомления здесь.", action: "Как включить", disabled: false };
-  if (Notification.permission === "denied") return { title: "Уведомления заблокированы", text: "Разрешите уведомления для Aurora Call в настройках iPhone, затем откройте приложение снова.", action: "Заблокировано", disabled: true };
-  if (Notification.permission === "granted") return { title: "Фоновые уведомления включены", text: "Aurora Call сможет сообщать о новых сообщениях и входящих звонках, когда приложение закрыто.", action: "Выключить уведомления", disabled: false, enabled: true };
-  return { title: "Уведомления о звонках и сообщениях", text: "Получайте push-уведомления, даже когда Aurora Call закрыт.", action: "Включить уведомления", disabled: false };
+  if (!supported())
+    return {
+      title: "Фоновые уведомления недоступны",
+      text: "Этот браузер не поддерживает Web Push.",
+      action: "Недоступно",
+      disabled: true,
+    };
+  if (!isStandalone() && /iPad|iPhone|iPod/.test(navigator.userAgent))
+    return {
+      title: "Уведомления о звонках и сообщениях",
+      text: "Добавьте Aurora Call на экран «Домой», затем включите уведомления здесь.",
+      action: "Как включить",
+      disabled: false,
+    };
+  if (Notification.permission === "denied")
+    return {
+      title: "Уведомления заблокированы",
+      text: "Разрешите уведомления для Aurora Call в настройках iPhone, затем откройте приложение снова.",
+      action: "Заблокировано",
+      disabled: true,
+    };
+  if (Notification.permission === "granted")
+    return {
+      title: "Фоновые уведомления включены",
+      text: "Aurora Call сможет сообщать о новых сообщениях и входящих звонках, когда приложение закрыто.",
+      action: "Выключить уведомления",
+      disabled: false,
+      enabled: true,
+    };
+  return {
+    title: "Уведомления о звонках и сообщениях",
+    text: "Получайте push-уведомления, даже когда Aurora Call закрыт.",
+    action: "Включить уведомления",
+    disabled: false,
+  };
 }
 
 function renderPushCard() {
   if (!state.session) return;
-  const settings = [...document.querySelectorAll(".screen")].find((screen) => screen.querySelector("#logout"));
+  const settings = [...document.querySelectorAll(".screen")].find((screen) =>
+    screen.querySelector("#logout"),
+  );
   if (!settings) return;
   let card = settings.querySelector("[data-push-settings]");
   if (!card) {
     card = document.createElement("div");
     card.className = "card media-access";
     card.dataset.pushSettings = "";
-    const qr = [...settings.querySelectorAll(".card")].find((item) => item.querySelector("#generate-invite"));
+    const qr = [...settings.querySelectorAll(".card")].find((item) =>
+      item.querySelector("#generate-invite"),
+    );
     settings.insertBefore(card, qr || settings.querySelector("#logout"));
   }
   const copy = cardCopy();
@@ -127,7 +189,9 @@ function renderPushCard() {
   card.innerHTML = `<span class="media-access-icon" aria-hidden="true">${copy.enabled ? "✓" : "●"}</span><div class="media-access-copy"><h2>${copy.title}</h2><p class="muted">${copy.text}</p></div><button class="btn ${copy.enabled ? "ghost" : ""}" data-push-toggle ${copy.disabled ? "disabled" : ""}>${copy.action}</button>`;
   card.querySelector("[data-push-toggle]")?.addEventListener("click", () => {
     if (!isStandalone() && /iPad|iPhone|iPod/.test(navigator.userAgent)) {
-      showToast("Safari → Поделиться → На экран «Домой», затем откройте Aurora Call с иконки");
+      showToast(
+        "Safari → Поделиться → На экран «Домой», затем откройте Aurora Call с иконки",
+      );
       return;
     }
     void (copy.enabled ? disableNotifications() : enableNotifications());
@@ -140,7 +204,12 @@ function handlePushLaunch() {
   if (type === "message") {
     const friendId = params.get("friend_id");
     const friendName = params.get("friend_name") || "Чат";
-    if (friendId) document.dispatchEvent(new CustomEvent("aurora-chat-open", { detail: { id: friendId, name: friendName } }));
+    if (friendId)
+      document.dispatchEvent(
+        new CustomEvent("aurora-chat-open", {
+          detail: { id: friendId, name: friendName },
+        }),
+      );
   }
   if (type) {
     params.delete("push");
@@ -155,13 +224,19 @@ function handlePushLaunch() {
 export function initPushNotifications() {
   renderPushCard();
   const root = document.getElementById("root");
-  if (root) new MutationObserver(renderPushCard).observe(root, { childList: true, subtree: true });
+  if (root)
+    new MutationObserver(renderPushCard).observe(root, {
+      childList: true,
+      subtree: true,
+    });
   window.setInterval(() => {
     renderPushCard();
-    if (supported() && Notification.permission === "granted" && state.session) void ensureSubscription().catch(() => {});
+    if (supported() && Notification.permission === "granted" && state.session)
+      void ensureSubscription().catch(() => {});
   }, 5000);
   window.setTimeout(handlePushLaunch, 600);
   navigator.serviceWorker?.addEventListener("message", (event) => {
-    if (event.data?.type === "aurora-push-open" && event.data.url) location.assign(event.data.url);
+    if (event.data?.type === "aurora-push-open" && event.data.url)
+      location.assign(event.data.url);
   });
 }

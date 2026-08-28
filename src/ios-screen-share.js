@@ -7,6 +7,7 @@ let firstFrameTimer = null;
 const nativeStreams = new WeakSet();
 
 function bridge() {
+  if (typeof window === "undefined") return null;
   return window.webkit?.messageHandlers?.auroraScreenShare || null;
 }
 
@@ -35,7 +36,11 @@ function destroyCanvasStream({ emitEnded = false } = {}) {
 }
 
 export function isIOSNativeScreenShareAvailable() {
-  return Boolean(bridge() && HTMLCanvasElement.prototype.captureStream);
+  return Boolean(
+    bridge() &&
+    typeof HTMLCanvasElement !== "undefined" &&
+    HTMLCanvasElement.prototype.captureStream,
+  );
 }
 
 export function isIOSScreenStream(candidate) {
@@ -44,8 +49,7 @@ export function isIOSScreenStream(candidate) {
 
 export async function createIOSScreenStream() {
   const nativeBridge = bridge();
-  if (!nativeBridge)
-    throw new Error("Aurora Call iOS bridge is unavailable");
+  if (!nativeBridge) throw new Error("Aurora Call iOS bridge is unavailable");
   if (!HTMLCanvasElement.prototype.captureStream)
     throw new Error("Canvas capture is unavailable");
 
@@ -74,10 +78,23 @@ export async function createIOSScreenStream() {
     if (!canvas || !context || !base64) return;
 
     try {
-      const response = await fetch(`data:image/jpeg;base64,${base64}`);
-      const bitmap = await createImageBitmap(await response.blob());
-      const sourceWidth = Number(width) || bitmap.width;
-      const sourceHeight = Number(height) || bitmap.height;
+      const sourceUrl = `data:image/jpeg;base64,${base64}`;
+      let bitmap;
+      if (typeof createImageBitmap === "function") {
+        const response = await fetch(sourceUrl);
+        bitmap = await createImageBitmap(await response.blob());
+      } else {
+        bitmap = await new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () =>
+            reject(new Error("ReplayKit frame decode failed"));
+          image.src = sourceUrl;
+        });
+      }
+      const sourceWidth = Number(width) || bitmap.naturalWidth || bitmap.width;
+      const sourceHeight =
+        Number(height) || bitmap.naturalHeight || bitmap.height;
 
       if (canvas.width !== sourceWidth || canvas.height !== sourceHeight) {
         canvas.width = sourceWidth;
@@ -91,7 +108,7 @@ export async function createIOSScreenStream() {
       clearFirstFrameWait();
     } catch (error) {
       firstFrameReject?.(error);
-      clearFirstFrameWait();
+      destroyCanvasStream({ emitEnded: true });
     }
   };
 
@@ -100,6 +117,7 @@ export async function createIOSScreenStream() {
       firstFrameReject?.(new Error("ReplayKit failed"));
       destroyCanvasStream({ emitEnded: true });
     } else if (status === "stopped") {
+      firstFrameReject?.(new Error("ReplayKit stopped"));
       destroyCanvasStream({ emitEnded: true });
     }
   };

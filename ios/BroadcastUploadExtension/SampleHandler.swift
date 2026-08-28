@@ -98,8 +98,10 @@ private final class ReplayKitFrameRelay {
         guard let metadataData = try? JSONSerialization.data(withJSONObject: metadata) else { return }
 
         do {
-            try jpeg.write(to: frameURL, options: .atomic)
             try metadataData.write(to: metadataURL, options: .atomic)
+            // The frame is the commit marker. Writing metadata first prevents
+            // the host app from pairing a new JPEG with stale dimensions.
+            try jpeg.write(to: frameURL, options: .atomic)
         } catch {
             ScreenShareFiles.writeStatus("failed")
         }
