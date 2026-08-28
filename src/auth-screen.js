@@ -48,8 +48,8 @@ function installStyle() {
   .auth-v2-field input,.auth-v2-field textarea{display:block;width:100%;height:62px;min-height:62px;margin:0!important;padding:0 50px 0 54px!important;border:1px solid rgba(118,123,164,.38)!important;border-radius:17px!important;background:rgba(8,11,28,.76)!important;color:#fff!important;font:16px inherit!important;outline:0!important;resize:none!important;box-shadow:none!important}
   .auth-v2-field input::placeholder,.auth-v2-field textarea::placeholder{color:#9fa1b4!important}
   .auth-v2-field input:focus,.auth-v2-field textarea:focus{border-color:#8d4cff!important;box-shadow:0 0 0 3px rgba(126,72,255,.1)!important}
-  .auth-v2-icon,.auth-v2-eye{position:absolute;top:50%;transform:translateY(-50%);display:grid;width:25px;height:25px;place-items:center;color:#954bff}
-  .auth-v2-icon{left:18px}.auth-v2-eye{right:16px;border:0;background:none;padding:0;color:#a6aac0}
+  .auth-v2-icon,.auth-v2-eye{position:absolute;top:50%;transform:translateY(-50%);display:grid;place-items:center;color:#954bff}
+  .auth-v2-icon{left:18px;width:25px;height:25px}.auth-v2-eye{right:6px;width:44px;height:44px;border:0;background:none;padding:0;color:#a6aac0}
   .auth-v2-icon svg,.auth-v2-eye svg,.auth-v2-arrow svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   .auth-v2-extras{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:3px 1px 18px;color:#bfc1cf;font-size:13px}
   .auth-v2-remember{display:flex;align-items:center;gap:8px;white-space:nowrap}.auth-v2-remember input{width:18px;height:18px;margin:0;accent-color:#8749ff}
