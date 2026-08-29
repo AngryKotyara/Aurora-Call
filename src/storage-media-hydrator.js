@@ -5,8 +5,10 @@ const EDGE_URL = `${config.functionsBaseUrl}aurora-chat-media`;
 const SIGNED_URL_TTL_MS = 12 * 60 * 1000;
 const SIGNED_URL_RETRY_DELAYS = [0, 400, 1200];
 const IMAGE_RETRY_DELAYS = [0, 700, 1800, 3500];
+const BACKGROUND_RETRY_DELAYS = [1200, 2500, 5000, 10000, 20000];
 const signedUrlCache = new Map();
 const signedUrlPending = new Map();
+const imageRetryState = new WeakMap();
 
 function sessionToken() {
   if (state.session?.token) return state.session.token;
@@ -85,6 +87,32 @@ function setLoadingLabel(frame) {
   if (!label) return;
   label.textContent =
     frame.dataset.mediaKind === "video" ? "Загрузка видео…" : "Загрузка фото…";
+}
+
+function clearImageRetry(frame) {
+  const retry = imageRetryState.get(frame);
+  if (retry?.timer) window.clearTimeout(retry.timer);
+  imageRetryState.delete(frame);
+}
+
+function scheduleImageRetry(frame) {
+  if (!frame.isConnected || frame.dataset.mediaKind !== "image") return;
+  const retry = imageRetryState.get(frame) || { attempt: 0, timer: null };
+  if (retry.timer) return;
+
+  const index = Math.min(retry.attempt, BACKGROUND_RETRY_DELAYS.length - 1);
+  const delay = BACKGROUND_RETRY_DELAYS[index];
+  retry.attempt += 1;
+  retry.timer = window.setTimeout(() => {
+    retry.timer = null;
+    if (!frame.isConnected || frame.classList.contains("is-loaded")) {
+      clearImageRetry(frame);
+      return;
+    }
+    frame.dataset.storageHydrated = "false";
+    void hydrate(frame, { force: true });
+  }, delay);
+  imageRetryState.set(frame, retry);
 }
 
 function showViewer(src) {
@@ -168,6 +196,7 @@ function revealImageOnce(frame, url) {
         frame.dataset.storageMediaSrc = url;
         frame.dataset.hydrated = "true";
         frame.classList.add("is-loaded");
+        clearImageRetry(frame);
         resolve();
       });
     image.onerror = () => finish(() => reject(mediaError("image_load_failed")));
@@ -276,6 +305,14 @@ async function hydrate(frame, { force = false } = {}) {
     }
     console.warn("Storage media hydration failed", error);
     frame.dataset.storageHydrated = "false";
+
+    if (frame.dataset.mediaKind === "image") {
+      frame.dataset.storageFailed = "false";
+      setLoadingLabel(frame);
+      scheduleImageRetry(frame);
+      return;
+    }
+
     frame.dataset.storageFailed = "true";
     const label = frame.querySelector(".chat-media-skeleton small");
     if (label) label.textContent = "Не удалось загрузить — нажмите для повтора";
@@ -296,7 +333,7 @@ function scan({ retryFailed = false } = {}) {
 
 const observer = new MutationObserver(() => scan());
 observer.observe(document.documentElement, { childList: true, subtree: true });
-window.addEventListener("pageshow", () => scan());
+window.addEventListener("pageshow", () => scan({ retryFailed: true }));
 window.addEventListener("online", () => scan({ retryFailed: true }));
 document.addEventListener("aurora-chat-media-complete", () => scan());
 scan();
