@@ -32,7 +32,9 @@ function cleanupExpired() {
 
 async function captureUploadBubble(bubble) {
   if (capturedBubbles.has(bubble)) return;
-  const image = bubble.querySelector(".chat-upload-preview img[src^='blob:']");
+  const image = bubble.querySelector(
+    ".chat-upload-preview img[src^='blob:']",
+  );
   if (!image) return;
   capturedBubbles.add(bubble);
 
@@ -126,7 +128,8 @@ async function handoff(frame, capture) {
   if (!messageId) return;
 
   for (const delay of RETRY_DELAYS) {
-    if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+    if (delay)
+      await new Promise((resolve) => window.setTimeout(resolve, delay));
     if (!frame.isConnected) return;
     try {
       const url = await getSignedUrl(messageId);
@@ -167,7 +170,9 @@ function scan() {
     .querySelectorAll("#chat-layer .chat-upload-bubble")
     .forEach((bubble) => void captureUploadBubble(bubble));
   document
-    .querySelectorAll('#chat-layer [data-media-kind="image"][data-chat-media-id]')
+    .querySelectorAll(
+      '#chat-layer [data-media-kind="image"][data-chat-media-id]',
+    )
     .forEach(adoptServerFrame);
   cleanupExpired();
 }
