@@ -3,11 +3,10 @@ import { state } from "./state.js";
 
 const EDGE_URL = `${config.functionsBaseUrl}aurora-chat-media`;
 const SIGNED_URL_TTL_MS = 12 * 60 * 1000;
-const RETRY_DELAYS = [0, 400, 1200];
+const SIGNED_URL_RETRY_DELAYS = [0, 400, 1200];
+const IMAGE_RETRY_DELAYS = [0, 700, 1800, 3500];
 const signedUrlCache = new Map();
 const signedUrlPending = new Map();
-const imageBlobCache = new Map();
-const imageBlobPending = new Map();
 
 function sessionToken() {
   if (state.session?.token) return state.session.token;
@@ -31,12 +30,6 @@ function mediaError(code, status = 0) {
   return error;
 }
 
-function revokeImageBlob(messageId) {
-  const cached = imageBlobCache.get(messageId);
-  if (cached?.url?.startsWith("blob:")) URL.revokeObjectURL(cached.url);
-  imageBlobCache.delete(messageId);
-}
-
 async function getSignedUrl(messageId, { force = false } = {}) {
   const cached = signedUrlCache.get(messageId);
   if (!force && cached?.expiresAt > Date.now()) return cached.url;
@@ -45,7 +38,7 @@ async function getSignedUrl(messageId, { force = false } = {}) {
 
   const task = (async () => {
     let lastError = null;
-    for (const delay of RETRY_DELAYS) {
+    for (const delay of SIGNED_URL_RETRY_DELAYS) {
       await sleep(delay);
       const token = sessionToken();
       if (!token) throw mediaError("missing_session");
@@ -84,33 +77,6 @@ async function getSignedUrl(messageId, { force = false } = {}) {
   })().finally(() => signedUrlPending.delete(messageId));
 
   signedUrlPending.set(messageId, task);
-  return task;
-}
-
-async function getImageBlobUrl(messageId, signedUrl, { force = false } = {}) {
-  if (!force && imageBlobCache.has(messageId))
-    return imageBlobCache.get(messageId).url;
-  if (imageBlobPending.has(messageId)) return imageBlobPending.get(messageId);
-  if (force) revokeImageBlob(messageId);
-
-  const task = (async () => {
-    const response = await fetch(signedUrl, {
-      method: "GET",
-      cache: "force-cache",
-      credentials: "omit",
-    });
-    if (!response.ok)
-      throw mediaError(`image_fetch_${response.status}`, response.status);
-    const blob = await response.blob();
-    if (!blob.size) throw mediaError("image_empty");
-    if (blob.type && !blob.type.startsWith("image/"))
-      throw mediaError("image_invalid_type");
-    const url = URL.createObjectURL(blob);
-    imageBlobCache.set(messageId, { url, size: blob.size, type: blob.type });
-    return url;
-  })().finally(() => imageBlobPending.delete(messageId));
-
-  imageBlobPending.set(messageId, task);
   return task;
 }
 
@@ -172,10 +138,18 @@ function bindFrameInteraction(frame) {
   );
 }
 
-function revealImage(frame, url) {
+function revealImageOnce(frame, url) {
   const image = frame.querySelector("img");
   if (!image) return Promise.reject(mediaError("image_missing"));
+
   image.decoding = "async";
+  image.loading = "eager";
+  try {
+    image.fetchPriority = "high";
+  } catch {
+    // Older WebKit versions do not expose fetchPriority.
+  }
+
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (handler) => {
@@ -185,6 +159,7 @@ function revealImage(frame, url) {
       image.onerror = null;
       handler();
     };
+
     image.onload = () =>
       finish(() => {
         frame.querySelector(".chat-media-skeleton")?.remove();
@@ -196,10 +171,45 @@ function revealImage(frame, url) {
         resolve();
       });
     image.onerror = () => finish(() => reject(mediaError("image_load_failed")));
-    image.src = url;
+
+    if (image.src !== url) image.src = url;
     if (image.complete && image.naturalWidth > 0)
       queueMicrotask(() => image.onload?.());
   });
+}
+
+async function revealImage(
+  frame,
+  messageId,
+  initialUrl,
+  { force = false } = {},
+) {
+  let signedUrl = initialUrl;
+  let lastError = null;
+
+  for (let attempt = 0; attempt < IMAGE_RETRY_DELAYS.length; attempt += 1) {
+    await sleep(IMAGE_RETRY_DELAYS[attempt]);
+    if (!frame.isConnected) return;
+    setLoadingLabel(frame);
+
+    try {
+      await revealImageOnce(frame, signedUrl);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === IMAGE_RETRY_DELAYS.length - 1) break;
+
+      if (attempt >= 1 || force) {
+        signedUrlCache.delete(messageId);
+        signedUrl = await getSignedUrl(messageId, { force: true });
+      }
+
+      const image = frame.querySelector("img");
+      if (image) image.removeAttribute("src");
+    }
+  }
+
+  throw lastError || mediaError("image_load_failed");
 }
 
 function revealVideo(frame, url) {
@@ -228,15 +238,6 @@ function revealVideo(frame, url) {
   });
 }
 
-async function reveal(frame, signedUrl, messageId, { force = false } = {}) {
-  if (frame.dataset.mediaKind === "image") {
-    const blobUrl = await getImageBlobUrl(messageId, signedUrl, { force });
-    return revealImage(frame, blobUrl);
-  }
-  if (frame.dataset.mediaKind === "video") return revealVideo(frame, signedUrl);
-  throw mediaError("unsupported_media_kind");
-}
-
 async function hydrate(frame, { force = false } = {}) {
   const id = Number(frame.dataset.chatMediaId || 0);
   if (
@@ -255,22 +256,17 @@ async function hydrate(frame, { force = false } = {}) {
   setLoadingLabel(frame);
 
   try {
-    let signedUrl = await getSignedUrl(id, { force });
+    const signedUrl = await getSignedUrl(id, { force });
     if (!frame.isConnected) return;
-    try {
-      await reveal(frame, signedUrl, id, { force });
-    } catch (error) {
-      if (
-        !String(error?.code || "").includes("load_failed") &&
-        !String(error?.code || "").startsWith("image_fetch_")
-      )
-        throw error;
-      signedUrlCache.delete(id);
-      revokeImageBlob(id);
-      signedUrl = await getSignedUrl(id, { force: true });
-      if (!frame.isConnected) return;
-      await reveal(frame, signedUrl, id, { force: true });
+
+    if (frame.dataset.mediaKind === "image") {
+      await revealImage(frame, id, signedUrl, { force });
+    } else if (frame.dataset.mediaKind === "video") {
+      await revealVideo(frame, signedUrl);
+    } else {
+      throw mediaError("unsupported_media_kind");
     }
+
     frame.dataset.storageHydrated = "true";
     frame.dataset.storageFailed = "false";
   } catch (error) {
@@ -303,10 +299,4 @@ observer.observe(document.documentElement, { childList: true, subtree: true });
 window.addEventListener("pageshow", () => scan());
 window.addEventListener("online", () => scan({ retryFailed: true }));
 document.addEventListener("aurora-chat-media-complete", () => scan());
-window.addEventListener("pagehide", () => {
-  imageBlobCache.forEach((value) => {
-    if (value?.url?.startsWith("blob:")) URL.revokeObjectURL(value.url);
-  });
-  imageBlobCache.clear();
-});
 scan();
