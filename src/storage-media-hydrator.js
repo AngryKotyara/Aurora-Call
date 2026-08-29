@@ -178,7 +178,12 @@ function revealImageOnce(frame, url) {
   });
 }
 
-async function revealImage(frame, messageId, initialUrl, { force = false } = {}) {
+async function revealImage(
+  frame,
+  messageId,
+  initialUrl,
+  { force = false } = {},
+) {
   let signedUrl = initialUrl;
   let lastError = null;
 
