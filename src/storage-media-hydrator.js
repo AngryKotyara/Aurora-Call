@@ -3,9 +3,11 @@ import { state } from "./state.js";
 
 const EDGE_URL = `${config.functionsBaseUrl}aurora-chat-media`;
 const SIGNED_URL_TTL_MS = 12 * 60 * 1000;
-const RETRY_DELAYS = [0, 350, 1000];
-const cache = new Map();
-const pending = new Map();
+const RETRY_DELAYS = [0, 400, 1200];
+const signedUrlCache = new Map();
+const signedUrlPending = new Map();
+const imageBlobCache = new Map();
+const imageBlobPending = new Map();
 
 function sessionToken() {
   if (state.session?.token) return state.session.token;
@@ -29,11 +31,17 @@ function mediaError(code, status = 0) {
   return error;
 }
 
+function revokeImageBlob(messageId) {
+  const cached = imageBlobCache.get(messageId);
+  if (cached?.url?.startsWith("blob:")) URL.revokeObjectURL(cached.url);
+  imageBlobCache.delete(messageId);
+}
+
 async function getSignedUrl(messageId, { force = false } = {}) {
-  const cached = cache.get(messageId);
+  const cached = signedUrlCache.get(messageId);
   if (!force && cached?.expiresAt > Date.now()) return cached.url;
-  if (pending.has(messageId)) return pending.get(messageId);
-  if (force) cache.delete(messageId);
+  if (signedUrlPending.has(messageId)) return signedUrlPending.get(messageId);
+  if (force) signedUrlCache.delete(messageId);
 
   const task = (async () => {
     let lastError = null;
@@ -44,9 +52,7 @@ async function getSignedUrl(messageId, { force = false } = {}) {
       try {
         const response = await fetch(EDGE_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "download",
             token,
@@ -67,7 +73,7 @@ async function getSignedUrl(messageId, { force = false } = {}) {
           url: payload.url,
           expiresAt: Date.now() + SIGNED_URL_TTL_MS,
         };
-        cache.set(messageId, value);
+        signedUrlCache.set(messageId, value);
         return value.url;
       } catch (error) {
         if (error?.code === "not_storage_media") throw error;
@@ -75,9 +81,35 @@ async function getSignedUrl(messageId, { force = false } = {}) {
       }
     }
     throw lastError || mediaError("download_failed");
-  })().finally(() => pending.delete(messageId));
+  })().finally(() => signedUrlPending.delete(messageId));
 
-  pending.set(messageId, task);
+  signedUrlPending.set(messageId, task);
+  return task;
+}
+
+async function getImageBlobUrl(messageId, signedUrl, { force = false } = {}) {
+  if (!force && imageBlobCache.has(messageId))
+    return imageBlobCache.get(messageId).url;
+  if (imageBlobPending.has(messageId)) return imageBlobPending.get(messageId);
+  if (force) revokeImageBlob(messageId);
+
+  const task = (async () => {
+    const response = await fetch(signedUrl, {
+      method: "GET",
+      cache: "force-cache",
+      credentials: "omit",
+    });
+    if (!response.ok) throw mediaError(`image_fetch_${response.status}`, response.status);
+    const blob = await response.blob();
+    if (!blob.size) throw mediaError("image_empty");
+    if (blob.type && !blob.type.startsWith("image/"))
+      throw mediaError("image_invalid_type");
+    const url = URL.createObjectURL(blob);
+    imageBlobCache.set(messageId, { url, size: blob.size, type: blob.type });
+    return url;
+  })().finally(() => imageBlobPending.delete(messageId));
+
+  imageBlobPending.set(messageId, task);
   return task;
 }
 
@@ -195,9 +227,12 @@ function revealVideo(frame, url) {
   });
 }
 
-async function reveal(frame, url) {
-  if (frame.dataset.mediaKind === "image") return revealImage(frame, url);
-  if (frame.dataset.mediaKind === "video") return revealVideo(frame, url);
+async function reveal(frame, signedUrl, messageId, { force = false } = {}) {
+  if (frame.dataset.mediaKind === "image") {
+    const blobUrl = await getImageBlobUrl(messageId, signedUrl, { force });
+    return revealImage(frame, blobUrl);
+  }
+  if (frame.dataset.mediaKind === "video") return revealVideo(frame, signedUrl);
   throw mediaError("unsupported_media_kind");
 }
 
@@ -208,7 +243,8 @@ async function hydrate(frame, { force = false } = {}) {
     frame.dataset.directSrc ||
     frame.dataset.storageSkipped === "true" ||
     frame.dataset.storageHydrating === "true" ||
-    (!force && frame.dataset.storageHydrated === "true")
+    (!force && frame.dataset.storageHydrated === "true") ||
+    (!force && frame.dataset.storageFailed === "true")
   )
     return;
 
@@ -218,16 +254,19 @@ async function hydrate(frame, { force = false } = {}) {
   setLoadingLabel(frame);
 
   try {
-    let url = await getSignedUrl(id, { force });
+    let signedUrl = await getSignedUrl(id, { force });
     if (!frame.isConnected) return;
     try {
-      await reveal(frame, url);
+      await reveal(frame, signedUrl, id, { force });
     } catch (error) {
-      if (!String(error?.code || "").endsWith("_load_failed")) throw error;
-      cache.delete(id);
-      url = await getSignedUrl(id, { force: true });
+      if (!String(error?.code || "").includes("load_failed") &&
+          !String(error?.code || "").startsWith("image_fetch_"))
+        throw error;
+      signedUrlCache.delete(id);
+      revokeImageBlob(id);
+      signedUrl = await getSignedUrl(id, { force: true });
       if (!frame.isConnected) return;
-      await reveal(frame, url);
+      await reveal(frame, signedUrl, id, { force: true });
     }
     frame.dataset.storageHydrated = "true";
     frame.dataset.storageFailed = "false";
@@ -261,4 +300,10 @@ observer.observe(document.documentElement, { childList: true, subtree: true });
 window.addEventListener("pageshow", () => scan());
 window.addEventListener("online", () => scan({ retryFailed: true }));
 document.addEventListener("aurora-chat-media-complete", () => scan());
+window.addEventListener("pagehide", () => {
+  imageBlobCache.forEach((value) => {
+    if (value?.url?.startsWith("blob:")) URL.revokeObjectURL(value.url);
+  });
+  imageBlobCache.clear();
+});
 scan();
