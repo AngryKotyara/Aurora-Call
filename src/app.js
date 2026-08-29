@@ -1,4 +1,4 @@
-import { registerByEmail, rpc } from "./api.js";
+import { loginByAccessKey, registerByEmail, rpc } from "./api.js";
 import { prepareAvatar, installProfileAvatar } from "./profile-avatar.js";
 import { applyBranding } from "./branding.js";
 import { pickCallContact } from "./call-picker.js";
@@ -11,9 +11,14 @@ import {
   requestMediaPermissions,
 } from "./media-permissions.js";
 import { installNavPolish } from "./nav-polish.js?v=20260813-gear2";
-import { clearSession, saveSession, state } from "./state.js";
+import {
+  clearSession,
+  migrateLegacySession,
+  saveSession,
+  state,
+} from "./state.js";
 import { renderAuth, renderInvite, renderMain } from "./ui.js";
-import { hashSecret, isValidUsername, query, showToast } from "./utils.js";
+import { isValidUsername, query, showToast } from "./utils.js";
 
 applyBranding();
 installIncomingCallAlerting();
@@ -66,12 +71,10 @@ async function register(username, email) {
     showToast(messages[error.message] || error.message);
   }
 }
+
 async function login(username, accessKey) {
   try {
-    const session = await rpc("login_call_user", {
-      p_username: username,
-      p_hash: await hashSecret(accessKey),
-    });
+    const session = await loginByAccessKey(username, accessKey);
     saveSession(session);
     await render();
     await acceptInviteFromUrl();
@@ -80,9 +83,6 @@ async function login(username, accessKey) {
   }
 }
 
-// Stable auth bridge used by the rebuilt login screen. This avoids relying on
-// event listeners attached to DOM nodes before they are moved/replaced, which
-// is unreliable in some Android WebViews.
 document.addEventListener("aurora-auth-login", (event) => {
   const username = String(event.detail?.username || "").trim();
   const accessKey = String(event.detail?.accessKey || "").trim();
@@ -279,6 +279,7 @@ async function render(activeScreen = "home") {
   });
 }
 async function bootstrap() {
+  await migrateLegacySession();
   try {
     await render();
   } catch (error) {
