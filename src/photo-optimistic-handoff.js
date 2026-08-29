@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { STORAGE_MEDIA_FRAME_SELECTOR } from "./chat-media-routing.js";
 import { state } from "./state.js";
 
 const EDGE_URL = `${config.functionsBaseUrl}aurora-chat-media`;
@@ -170,7 +171,7 @@ function scan() {
     .forEach((bubble) => void captureUploadBubble(bubble));
   document
     .querySelectorAll(
-      '#chat-layer [data-media-kind="image"][data-chat-media-id]',
+      `#chat-layer ${STORAGE_MEDIA_FRAME_SELECTOR}[data-media-kind="image"]`,
     )
     .forEach(adoptServerFrame);
   cleanupExpired();

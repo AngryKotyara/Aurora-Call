@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { STORAGE_MEDIA_FRAME_SELECTOR } from "./chat-media-routing.js";
 import { state } from "./state.js";
 
 const EDGE_URL = `${config.functionsBaseUrl}aurora-chat-media`;
@@ -323,7 +324,7 @@ async function hydrate(frame, { force = false } = {}) {
 
 function scan({ retryFailed = false } = {}) {
   document
-    .querySelectorAll("#chat-layer [data-chat-media-id]")
+    .querySelectorAll(`#chat-layer ${STORAGE_MEDIA_FRAME_SELECTOR}`)
     .forEach((frame) => {
       if (retryFailed && frame.dataset.storageFailed === "true")
         frame.dataset.storageFailed = "false";

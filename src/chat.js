@@ -1,4 +1,8 @@
 import { rpc } from "./api.js";
+import {
+  LEGACY_MEDIA_FRAME_SELECTOR,
+  mediaRoutingAttribute,
+} from "./chat-media-routing.js";
 import { state } from "./state.js";
 import { escapeHtml, showToast } from "./utils.js";
 
@@ -183,7 +187,7 @@ async function renderThreads() {
     );
 }
 
-function mediaMarkup(message) {
+export function mediaMarkup(message) {
   if (!message.media_data) return "";
   const name = escapeHtml(
     message.media_name || (message.kind === "image" ? "Фото" : "Видео"),
@@ -194,10 +198,11 @@ function mediaMarkup(message) {
   const directAttr = direct
     ? ` data-direct-src="${escapeHtml(message.media_data)}"`
     : "";
+  const routingAttr = mediaRoutingAttribute(message.media_data);
   if (message.kind === "image")
-    return `<button class="chat-media-open chat-media-frame" data-chat-media-id="${message.id}" data-media-kind="image" data-media-name="${name}"${directAttr}><div class="chat-media-skeleton"><span class="chat-media-spinner"></span><small>Загрузка фото…</small></div><img alt="${name}" loading="eager" hidden></button>`;
+    return `<button class="chat-media-open chat-media-frame" data-chat-media-id="${message.id}" data-media-kind="image" data-media-name="${name}"${directAttr}${routingAttr}><div class="chat-media-skeleton"><span class="chat-media-spinner"></span><small>Загрузка фото…</small></div><img alt="${name}" loading="eager" hidden></button>`;
   if (message.kind === "video")
-    return `<div class="chat-media-frame chat-video-frame" data-chat-media-id="${message.id}" data-media-kind="video" data-media-name="${name}"${directAttr}><div class="chat-media-skeleton"><span class="chat-media-spinner"></span><small>Загрузка видео…</small></div><video class="chat-video" controls playsinline preload="metadata" hidden></video></div>`;
+    return `<div class="chat-media-frame chat-video-frame" data-chat-media-id="${message.id}" data-media-kind="video" data-media-name="${name}"${directAttr}${routingAttr}><div class="chat-media-skeleton"><span class="chat-media-spinner"></span><small>Загрузка видео…</small></div><video class="chat-video" controls playsinline preload="metadata" hidden></video></div>`;
   return "";
 }
 
@@ -267,7 +272,7 @@ function showUnsupportedMedia(frame, src, name) {
 
 async function hydrateMedia() {
   const frames = [
-    ...document.querySelectorAll("#chat-layer [data-chat-media-id]"),
+    ...document.querySelectorAll(`#chat-layer ${LEGACY_MEDIA_FRAME_SELECTOR}`),
   ];
   await Promise.all(
     frames.map(async (frame) => {
