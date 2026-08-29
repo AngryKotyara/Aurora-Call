@@ -17,9 +17,8 @@ async function sendPushEvent(action, body) {
       {
         method: "POST",
         headers: {
-          apikey: config.supabasePublishableKey,
           "Content-Type": "application/json",
-          "X-Client-Info": "aurora-call-web/1",
+          "X-Client-Info": "aurora-call-web/2",
         },
         body: JSON.stringify({ action, ...body }),
       },
@@ -31,10 +30,9 @@ async function sendPushEvent(action, body) {
 }
 
 function dispatchPushForRpc(functionName, requestBody, result) {
-  if (!requestBody?.p_token || !requestBody?.p_to || result == null) return;
+  if (!requestBody?.p_to || result == null) return;
   if (functionName === "start_call") {
     void sendPushEvent("notify_call", {
-      p_token: requestBody.p_token,
       p_to: requestBody.p_to,
       call_id: result,
     });
@@ -45,7 +43,6 @@ function dispatchPushForRpc(functionName, requestBody, result) {
     functionName === "upload_chat_media"
   ) {
     void sendPushEvent("notify_message", {
-      p_token: requestBody.p_token,
       p_to: requestBody.p_to,
       message_id: result,
     });
@@ -58,9 +55,8 @@ export async function rpc(functionName, body, policy = {}) {
     {
       method: "POST",
       headers: {
-        apikey: config.supabasePublishableKey,
         "Content-Type": "application/json",
-        "X-Client-Info": "aurora-call-web/1",
+        "X-Client-Info": "aurora-call-web/2",
       },
       body: JSON.stringify(body),
     },
@@ -74,15 +70,33 @@ export async function rpc(functionName, body, policy = {}) {
   return result;
 }
 
+export async function loginByAccessKey(username, accessKey) {
+  const response = await resilientFetch(
+    "/api/auth-login",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Client-Info": "aurora-call-web/2",
+      },
+      body: JSON.stringify({ username, accessKey }),
+    },
+    { retries: 0, timeoutMs: 15000 },
+  );
+  const responseBody = await response.text();
+  if (!response.ok) throw new Error(getErrorMessage(responseBody));
+  return responseBody ? JSON.parse(responseBody) : null;
+}
+
 export async function registerByEmail(username, email) {
   const response = await resilientFetch(
-    `${config.functionsBaseUrl}aurora-register-email`,
+    `${config.publicFunctionsBaseUrl}aurora-register-email`,
     {
       method: "POST",
       headers: {
         apikey: config.supabasePublishableKey,
         "Content-Type": "application/json",
-        "X-Client-Info": "aurora-call-web/1",
+        "X-Client-Info": "aurora-call-web/2",
       },
       body: JSON.stringify({ username, email }),
     },
