@@ -94,6 +94,20 @@ test("video calls do not render the audio-only backdrop over remote video", () =
   );
 });
 
+test("chat call icon polish cannot trigger its MutationObserver forever", () => {
+  const source = readFileSync(
+    new URL("../src/chat-polish.js", import.meta.url),
+    "utf8",
+  );
+  const guard = source.indexOf('button.dataset.modernCallIcon === "true"');
+  const mark = source.indexOf('button.dataset.modernCallIcon = "true"');
+  const replaceChildren = source.indexOf("button.innerHTML = CALL_ICONS[mode]");
+
+  assert.ok(guard >= 0);
+  assert.ok(mark > guard);
+  assert.ok(replaceChildren > mark);
+});
+
 test("authentication controls keep a mobile-sized password visibility target", () => {
   const authScreen = readFileSync(
     new URL("../src/auth-screen.js", import.meta.url),
