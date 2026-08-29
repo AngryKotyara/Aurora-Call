@@ -8,8 +8,10 @@ import {
 
 export default async function handler(req, res) {
   noStore(res);
-  if (req.method !== "POST") return res.status(405).json({ error: "method_not_allowed" });
-  if (!sameOriginRequest(req)) return res.status(403).json({ error: "forbidden" });
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "method_not_allowed" });
+  if (!sameOriginRequest(req))
+    return res.status(403).json({ error: "forbidden" });
 
   const body = requestBody(req);
   const token = String(body?.token || "");
