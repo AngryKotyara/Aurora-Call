@@ -78,6 +78,22 @@ test("PWA and viewport metadata allow rotation, safe areas, and user zoom", () =
   assert.match(chatStyles, /\.chat-input,[\s\S]*font-size:\s*16px/);
 });
 
+test("video calls do not render the audio-only backdrop over remote video", () => {
+  const callStyles = readFileSync(
+    new URL("../src/call-screen.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    callStyles,
+    /\.call-screen \.call-audio-backdrop\s*\{[\s\S]*?display:\s*none;/,
+  );
+  assert.match(
+    callStyles,
+    /\.call-screen\.audio-call \.call-audio-backdrop\s*\{\s*display:\s*grid;/,
+  );
+});
+
 test("authentication controls keep a mobile-sized password visibility target", () => {
   const authScreen = readFileSync(
     new URL("../src/auth-screen.js", import.meta.url),
