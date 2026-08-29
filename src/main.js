@@ -1,7 +1,7 @@
 // Aurora Call browser entrypoint.
 // Keep startup order explicit: core app first, then UI/features that observe it.
 import "./media-compression-hook.js";
-import "./resumable-media.js";
+import "./resumable-media.js?v=20260830-media3";
 import "./app.js?v=20260818-android-auth2";
 import "./auth-screen.js?v=20260818-android-auth2";
 import "./auth-screen-polish.js?v=20260818-android-auth2";

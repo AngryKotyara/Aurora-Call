@@ -213,6 +213,7 @@ function createUploadBubble(file) {
   messages?.querySelector(".chat-empty-conversation")?.remove();
   const article = document.createElement("article");
   article.className = "chat-bubble outgoing chat-upload-bubble";
+  article.dataset.optimisticMedia = "true";
   const preview = URL.createObjectURL(file);
   const image = file.type.startsWith("image/");
   article.innerHTML = `<div class="chat-upload-preview">${image ? `<img src="${preview}" alt="${escapeHtml(file.name)}">` : `<video src="${preview}" muted playsinline></video>`}<div class="chat-upload-mask"><span class="chat-upload-ring" style="--p:0"><b>0%</b></span><small>Отправка ${image ? "фото" : "видео"}</small></div></div><div class="chat-message-meta"><span>${escapeHtml(file.name)}</span></div>`;
@@ -234,6 +235,31 @@ function createUploadBubble(file) {
       }
     },
   };
+}
+
+function keepPreviewUntilHandoff(ui) {
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    URL.revokeObjectURL(ui.preview);
+  };
+
+  if (!ui.article.isConnected) {
+    release();
+    return;
+  }
+
+  const observer = new MutationObserver(() => {
+    if (ui.article.isConnected) return;
+    observer.disconnect();
+    release();
+  });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+  window.addEventListener("pagehide", release, { once: true });
 }
 
 async function finalizeMessage(file, friend, ticket) {
@@ -287,10 +313,9 @@ export async function handleResumableMedia(file) {
     await finalizeMessage(file, friend, ticket);
     localStorage.removeItem(key);
     ui.update(100, "Отправлено");
-    window.setTimeout(() => {
-      ui.article.remove();
-      document.dispatchEvent(new CustomEvent("aurora-chat-media-complete"));
-    }, 450);
+    ui.article.classList.add("is-complete");
+    keepPreviewUntilHandoff(ui);
+    document.dispatchEvent(new CustomEvent("aurora-chat-media-complete"));
   } catch (error) {
     console.error("Resumable upload failed", error);
     ui.article.classList.add("is-failed");
@@ -307,8 +332,7 @@ export async function handleResumableMedia(file) {
         ? "Видео загружено. Выберите тот же файл ещё раз — повторно загружать его не придётся."
         : "Не удалось отправить файл. Повторная попытка продолжит загрузку.",
     );
-  } finally {
-    URL.revokeObjectURL(ui.preview);
+    keepPreviewUntilHandoff(ui);
   }
 }
 
