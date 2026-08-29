@@ -10,7 +10,7 @@ import "./hero-copy-polish.js";
 import "./home-fullscreen-flow.js";
 import "./home-call-buttons.js";
 import "./voice-messages-v2.js";
-import "./storage-media-hydrator.js?v=20260829-chat2";
+import "./storage-media-hydrator.js?v=20260830-chat6";
 import "./photo-viewer-ux.js?v=20260830-photo1";
 import "./chat-polish.js?v=20260829-chat3";
 import "./chat-call-priority.js?v=20260829-chat4";
@@ -22,7 +22,7 @@ import { initPushNotifications } from "./push-notifications.js?v=20260815-push1"
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", async () => {
     try {
-      await window.navigator.serviceWorker.register("/sw.js?v=20260815-push1");
+      await window.navigator.serviceWorker.register("/sw.js?v=20260830-media1");
       initPushNotifications();
     } catch (error) {
       console.warn("Service worker unavailable", error);
