@@ -31,11 +31,27 @@ export function saveSession(session) {
   localStorage.setItem(config.sessionStorageKey, JSON.stringify(session));
 }
 
+function revokeSessionOnServer(token) {
+  if (!token) return;
+  void fetch(`${config.rpcBaseUrl}revoke_call_session`, {
+    method: "POST",
+    headers: {
+      apikey: config.supabasePublishableKey,
+      "Content-Type": "application/json",
+      "X-Client-Info": "aurora-call-web/1",
+    },
+    body: JSON.stringify({ p_token: token }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 export function clearSession() {
+  const token = state.session?.token || null;
   state.session = null;
   state.friends = [];
   state.callHistory = [];
   state.selectedFriend = null;
   state.lastSignalId = 0;
   localStorage.removeItem(config.sessionStorageKey);
+  revokeSessionOnServer(token);
 }
