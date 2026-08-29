@@ -7,6 +7,7 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
     private var lastFrameModificationDate: Date?
     private var lastStatus: String?
     private var trustedWebHost: String?
+    private var trustedWebScheme: String?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -41,6 +42,7 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
 
         guard let url = URL(string: urlString) else { return }
         trustedWebHost = url.host?.lowercased()
+        trustedWebScheme = url.scheme?.lowercased()
         webView.load(URLRequest(url: url))
 
         frameTimer = Timer.scheduledTimer(
@@ -59,11 +61,25 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
         )
     }
 
+    private func isTrustedOrigin(scheme: String, host: String) -> Bool {
+        guard let trustedWebHost, let trustedWebScheme else { return false }
+        return scheme.lowercased() == trustedWebScheme
+            && host.lowercased() == trustedWebHost
+    }
+
+    private func isTrustedWebURL(_ url: URL) -> Bool {
+        guard let scheme = url.scheme, let host = url.host else { return false }
+        return isTrustedOrigin(scheme: scheme, host: host)
+    }
+
     func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
     ) {
+        let origin = message.frameInfo.securityOrigin
         guard message.name == "auroraScreenShare",
+              message.frameInfo.isMainFrame,
+              isTrustedOrigin(scheme: origin.protocol, host: origin.host),
               let body = message.body as? [String: Any],
               let action = body["action"] as? String else { return }
 
@@ -78,6 +94,28 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
         }
     }
 
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.cancel)
+            return
+        }
+
+        if isTrustedWebURL(url) {
+            decisionHandler(.allow)
+            return
+        }
+
+        if navigationAction.navigationType == .linkActivated,
+           UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        }
+        decisionHandler(.cancel)
+    }
+
     @available(iOS 15.0, *)
     func webView(
         _ webView: WKWebView,
@@ -86,9 +124,9 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
         type: WKMediaCaptureType,
         decisionHandler: @escaping (WKPermissionDecision) -> Void
     ) {
-        let isTrustedOrigin = origin.protocol.lowercased() == "https"
-            && origin.host.lowercased() == trustedWebHost
-        decisionHandler(isTrustedOrigin ? .grant : .prompt)
+        let isTrusted = frame.isMainFrame
+            && isTrustedOrigin(scheme: origin.protocol, host: origin.host)
+        decisionHandler(isTrusted ? .grant : .deny)
     }
 
     @objc private func relayReplayKitFrame() {
