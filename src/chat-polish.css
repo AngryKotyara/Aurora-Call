@@ -19,9 +19,12 @@
     box-shadow 0.14s ease;
 }
 
-.chat-send[hidden],
-.chat-voice-record[hidden] {
-  display: none !important;
+/* Keep both composer actions visible. The voice module may toggle the hidden
+   attribute depending on text input, but the product UI keeps send + mic side
+   by side at all times. sendText() already ignores an empty message. */
+.chat-composer .chat-send[hidden],
+.chat-composer .chat-voice-record[hidden] {
+  display: grid !important;
 }
 
 .chat-send svg,
