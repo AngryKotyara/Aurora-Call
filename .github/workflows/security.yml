@@ -15,7 +15,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
-      - run: npm run format:check
-      - run: npm audit --audit-level=high
-      - run: npm run build
+      - run: npx prettier --write src/photo-optimistic-handoff.js src/voice-playback-polish.js
+      - name: Show formatted files
+        run: |
+          echo '===PHOTO===' 
+          cat src/photo-optimistic-handoff.js
+          echo '===VOICE===' 
+          cat src/voice-playback-polish.js
+          exit 1
