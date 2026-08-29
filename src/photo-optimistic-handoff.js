@@ -32,9 +32,7 @@ function cleanupExpired() {
 
 async function captureUploadBubble(bubble) {
   if (capturedBubbles.has(bubble)) return;
-  const image = bubble.querySelector(
-    ".chat-upload-preview img[src^='blob:']",
-  );
+  const image = bubble.querySelector(".chat-upload-preview img[src^='blob:']");
   if (!image) return;
   capturedBubbles.add(bubble);
 
@@ -44,7 +42,8 @@ async function captureUploadBubble(bubble) {
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const name =
-      bubble.querySelector(".chat-message-meta span")?.textContent?.trim() || "";
+      bubble.querySelector(".chat-message-meta span")?.textContent?.trim() ||
+      "";
     captures.push({
       url,
       name,
