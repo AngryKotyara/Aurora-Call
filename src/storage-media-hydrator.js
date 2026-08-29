@@ -242,8 +242,7 @@ async function hydrate(frame, { force = false } = {}) {
     frame.dataset.storageHydrated = "false";
     frame.dataset.storageFailed = "true";
     const label = frame.querySelector(".chat-media-skeleton small");
-    if (label)
-      label.textContent = "Не удалось загрузить — нажмите для повтора";
+    if (label) label.textContent = "Не удалось загрузить — нажмите для повтора";
   } finally {
     frame.dataset.storageHydrating = "false";
   }

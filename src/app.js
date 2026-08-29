@@ -1,4 +1,5 @@
 import { registerByEmail, rpc } from "./api.js";
+import { prepareAvatar, installProfileAvatar } from "./profile-avatar.js";
 import { applyBranding } from "./branding.js";
 import { pickCallContact } from "./call-picker.js";
 import { startCall, startSignalPolling } from "./calls.js";
@@ -156,6 +157,51 @@ async function deleteFriend(friend) {
   }
 }
 
+async function updateAvatar(file) {
+  try {
+    const avatar = await prepareAvatar(file);
+    const result = await rpc("set_call_avatar", {
+      p_token: state.session.token,
+      p_avatar: avatar,
+    });
+    saveSession({
+      ...state.session,
+      avatar: result?.avatar || avatar,
+    });
+    showToast("Фото профиля обновлено", true);
+    await render("settings");
+  } catch (error) {
+    const messages = {
+      invalid_avatar_type: "Выберите изображение",
+      avatar_too_large: "Исходное фото должно быть не больше 8 МБ",
+      unsupported_image:
+        "Этот формат изображения не поддерживается устройством",
+      avatar_processing_failed: "Не удалось обработать фото",
+      invalid_avatar: "Сервер отклонил изображение",
+      invalid_session: "Сессия истекла. Войдите снова",
+    };
+    showToast(messages[error.message] || "Не удалось обновить фото профиля");
+  }
+}
+
+async function removeAvatar() {
+  try {
+    await rpc("set_call_avatar", {
+      p_token: state.session.token,
+      p_avatar: null,
+    });
+    saveSession({ ...state.session, avatar: null });
+    showToast("Фото профиля удалено", true);
+    await render("settings");
+  } catch (error) {
+    showToast(
+      error.message === "invalid_session"
+        ? "Сессия истекла. Войдите снова"
+        : "Не удалось удалить фото профиля",
+    );
+  }
+}
+
 async function toggleMediaAccess(activeScreen) {
   const current = await inspectMediaPermissions(state.session).catch(() => ({
     status: "prompt",
@@ -195,11 +241,20 @@ async function render(activeScreen = "home") {
     renderAuth({ onRegister: register, onLogin: login });
     return;
   }
-  const [friends, callHistory, mediaPermission] = await Promise.all([
+  const [friends, callHistory, mediaPermission, profile] = await Promise.all([
     rpc("list_call_friends", { p_token: state.session.token }).catch(() => []),
     rpc("list_call_history", { p_token: state.session.token }).catch(() => []),
     inspectMediaPermissions(state.session).catch(() => ({ status: "prompt" })),
+    rpc("get_call_profile", { p_token: state.session.token }).catch(() => null),
   ]);
+  if (profile?.username) {
+    saveSession({
+      ...state.session,
+      user_id: profile.user_id || state.session.user_id,
+      username: profile.username,
+      avatar: profile.avatar || null,
+    });
+  }
   state.friends = Array.isArray(friends) ? friends : [];
   state.callHistory = Array.isArray(callHistory) ? callHistory : [];
   renderMain({
@@ -215,6 +270,12 @@ async function render(activeScreen = "home") {
     onDeleteFriend: deleteFriend,
     onRequestMediaAccess: () => toggleMediaAccess(activeScreen),
     onLogout: logout,
+  });
+  installProfileAvatar({
+    session: state.session,
+    friends: state.friends,
+    onChange: updateAvatar,
+    onRemove: removeAvatar,
   });
 }
 async function bootstrap() {

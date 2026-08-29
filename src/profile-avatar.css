@@ -1,0 +1,124 @@
+.profile-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 0 0, #6b4dff22, transparent 42%), var(--card);
+}
+
+.profile-avatar-picker {
+  position: relative;
+  display: block;
+  width: 96px;
+  height: 96px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.profile-avatar,
+.av.has-avatar {
+  overflow: hidden;
+}
+
+.profile-avatar {
+  display: grid;
+  width: 96px;
+  height: 96px;
+  overflow: hidden;
+  border: 2px solid #ffffff24;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #338eff, #b43fff);
+  box-shadow:
+    0 0 0 4px #8a63ff14,
+    0 14px 34px #0006;
+  color: #fff;
+  font-size: 34px;
+  font-weight: 900;
+  place-items: center;
+}
+
+.profile-avatar img,
+.av.has-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.profile-avatar-edit {
+  position: absolute;
+  right: -2px;
+  bottom: 1px;
+  display: grid;
+  width: 31px;
+  height: 31px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8a4fff, #2b8cff);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 6px 18px #0006;
+  place-items: center;
+}
+
+.profile-avatar-picker.is-busy {
+  pointer-events: none;
+  opacity: 0.68;
+}
+
+.profile-avatar-copy {
+  min-width: 0;
+}
+
+.profile-avatar-copy h2 {
+  margin: 4px 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-avatar-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.profile-avatar-status {
+  display: block;
+  min-height: 18px;
+  margin-top: 7px;
+  font-size: 12px;
+}
+
+.profile-avatar-remove {
+  margin-top: 8px;
+  padding: 8px 11px;
+  border: 1px solid #ff65734a;
+  border-radius: 11px;
+  background: #3b171d;
+  color: #ff9aa4;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.profile-avatar-remove:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+@media (max-width: 360px) {
+  .profile-card {
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .profile-avatar-picker,
+  .profile-avatar {
+    width: 78px;
+    height: 78px;
+  }
+}
