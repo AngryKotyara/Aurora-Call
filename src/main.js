@@ -12,6 +12,7 @@ import "./home-call-buttons.js";
 import "./voice-messages-v2.js";
 import "./voice-playback-polish.js?v=20260830-voice1";
 import "./storage-media-hydrator.js?v=20260830-chat6";
+import "./photo-soft-retry.js?v=20260830-photo2";
 import "./photo-viewer-ux.js?v=20260830-photo1";
 import "./chat-polish.js?v=20260829-chat3";
 import "./chat-call-priority.js?v=20260829-chat4";
