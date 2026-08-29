@@ -10,6 +10,7 @@ import "./hero-copy-polish.js";
 import "./home-fullscreen-flow.js";
 import "./home-call-buttons.js";
 import "./voice-messages-v2.js";
+import "./voice-playback-polish.js?v=20260830-voice1";
 import "./storage-media-hydrator.js?v=20260830-chat6";
 import "./photo-viewer-ux.js?v=20260830-photo1";
 import "./chat-polish.js?v=20260829-chat3";
