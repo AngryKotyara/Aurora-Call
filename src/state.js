@@ -28,12 +28,7 @@ export const state = {
 
 function publicSession(session) {
   if (!session) return null;
-  return {
-    user_id: session.user_id,
-    username: session.username,
-    expires_at: session.expires_at || null,
-    token: true,
-  };
+  return { ...session, token: true };
 }
 
 export function saveSession(session) {
