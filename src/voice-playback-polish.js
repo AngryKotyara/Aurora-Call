@@ -1,5 +1,7 @@
-const PLAY_ICON = '<svg viewBox="0 0 24 24"><path d="m9 6 9 6-9 6z"/></svg>';
-const PAUSE_ICON = '<svg viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg>';
+const PLAY_ICON =
+  '<svg viewBox="0 0 24 24"><path d="m9 6 9 6-9 6z"/></svg>';
+const PAUSE_ICON =
+  '<svg viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg>';
 
 const visualState = new WeakMap();
 const activeAudio = new Set();
@@ -27,7 +29,9 @@ function syncButton(audio, player, button) {
   button.setAttribute("aria-pressed", String(playing));
   button.setAttribute(
     "aria-label",
-    playing ? "Поставить голосовое сообщение на паузу" : "Воспроизвести голосовое сообщение",
+    playing
+      ? "Поставить голосовое сообщение на паузу"
+      : "Воспроизвести голосовое сообщение",
   );
 
   if (button.dataset.voicePlaybackState !== nextState) {
@@ -41,13 +45,18 @@ function syncWave(audio, force = false, reset = false) {
   if (!player || !wave) return;
 
   const bars = Array.from(wave.querySelectorAll("i"));
-  const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
-  const ratio = reset || !duration ? 0 : Math.min(1, Math.max(0, audio.currentTime / duration));
+  const duration =
+    Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+  const ratio =
+    reset || !duration
+      ? 0
+      : Math.min(1, Math.max(0, audio.currentTime / duration));
   const playing = !audio.paused && !audio.ended;
   const playedCount = Math.min(bars.length, Math.floor(ratio * bars.length));
-  const currentIndex = playing && bars.length
-    ? Math.min(bars.length - 1, Math.floor(ratio * bars.length))
-    : -1;
+  const currentIndex =
+    playing && bars.length
+      ? Math.min(bars.length - 1, Math.floor(ratio * bars.length))
+      : -1;
 
   const previous = visualState.get(audio);
   if (
@@ -94,7 +103,9 @@ function stopTracking(audio, reset = false) {
 }
 
 function isVoiceAudio(target) {
-  return target instanceof HTMLAudioElement && target.matches("audio[data-aurora-voice]");
+  return (
+    target instanceof HTMLAudioElement && target.matches("audio[data-aurora-voice]")
+  );
 }
 
 document.addEventListener(
@@ -124,7 +135,13 @@ document.addEventListener(
   true,
 );
 
-for (const type of ["loadedmetadata", "durationchange", "seeking", "seeked", "timeupdate"]) {
+for (const type of [
+  "loadedmetadata",
+  "durationchange",
+  "seeking",
+  "seeked",
+  "timeupdate",
+]) {
   document.addEventListener(
     type,
     (event) => {
@@ -136,7 +153,9 @@ for (const type of ["loadedmetadata", "durationchange", "seeking", "seeked", "ti
 }
 
 function initialize(root = document) {
-  root.querySelectorAll?.("audio[data-aurora-voice]").forEach((audio) => syncWave(audio, true));
+  root
+    .querySelectorAll?.("audio[data-aurora-voice]")
+    .forEach((audio) => syncWave(audio, true));
 }
 
 initialize();
