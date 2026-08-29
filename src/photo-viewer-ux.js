@@ -266,6 +266,17 @@ function enhanceViewer(viewer) {
   const isControl = (target) =>
     target instanceof Element && Boolean(target.closest(".chat-viewer-close"));
 
+  // Safari exposes its own pinch gesture on top of touch events. Keep that
+  // native page zoom disabled only inside the open viewer; our touch handlers
+  // below apply every scale and translation exclusively to the photo element.
+  const preventNativePageZoom = (event) => event.preventDefault();
+  const nativeGestureEvents = ["gesturestart", "gesturechange", "gestureend"];
+  nativeGestureEvents.forEach((eventName) => {
+    viewer.addEventListener(eventName, preventNativePageZoom, {
+      passive: false,
+    });
+  });
+
   viewer.addEventListener(
     "touchstart",
     (event) => {
@@ -479,6 +490,9 @@ function enhanceViewer(viewer) {
     window.removeEventListener("mouseup", onMouseUp);
     window.removeEventListener("resize", onResize);
     document.removeEventListener("keydown", onKeyDown);
+    nativeGestureEvents.forEach((eventName) => {
+      viewer.removeEventListener(eventName, preventNativePageZoom);
+    });
     removalObserver?.disconnect();
   };
 

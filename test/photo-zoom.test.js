@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -53,4 +54,16 @@ test("zooming around a touch keeps that point under the fingers", () => {
     input.centerY + translated.y + input.nextScale * localY,
     input.focalY,
   );
+});
+
+test("pinch zoom transforms only the photo and blocks Safari page zoom", () => {
+  const source = readFileSync(
+    new URL("../src/photo-viewer-ux.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /image\.style\.transform/);
+  assert.doesNotMatch(source, /viewer\.style\.transform/);
+  assert.match(source, /\["gesturestart", "gesturechange", "gestureend"\]/);
+  assert.match(source, /preventNativePageZoom/);
 });
