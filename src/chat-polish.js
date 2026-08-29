@@ -15,12 +15,16 @@ function polishCallShortcuts() {
     .querySelectorAll("#chat-layer .chat-call-shortcut[data-chat-call]")
     .forEach((button) => {
       const mode = button.dataset.chatCall;
-      if (!CALL_ICONS[mode]) return;
-      button.type = "button";
-      button.innerHTML = CALL_ICONS[mode];
+      if (!CALL_ICONS[mode] || button.dataset.modernCallIcon === "true") return;
+
+      // Mark the element before replacing its children. Replacing innerHTML is a
+      // child-list mutation, so without this guard our MutationObserver would
+      // continuously trigger itself and freeze the chat UI.
       button.dataset.modernCallIcon = "true";
+      button.type = "button";
       button.setAttribute("aria-label", LABELS[mode]);
       button.title = LABELS[mode];
+      button.innerHTML = CALL_ICONS[mode];
     });
 }
 
