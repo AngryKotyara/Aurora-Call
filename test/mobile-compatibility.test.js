@@ -117,7 +117,7 @@ test("authentication controls keep a mobile-sized password visibility target", (
   assert.match(authScreen, /\.auth-v2-eye\{[^}]*width:44px;[^}]*height:44px/);
 });
 
-test("native iOS wrapper keeps media permission, background audio, and atomic ReplayKit frames", () => {
+test("native iOS wrapper keeps media permission, background audio, atomic ReplayKit frames, and a trusted-origin boundary", () => {
   const viewController = readFileSync(
     new URL("../ios/AuroraCall/ViewController.swift", import.meta.url),
     "utf8",
@@ -140,7 +140,13 @@ test("native iOS wrapper keeps media permission, background audio, and atomic Re
 
   assert.match(viewController, /WKUIDelegate/);
   assert.match(viewController, /requestMediaCapturePermissionFor/);
-  assert.match(viewController, /isTrustedOrigin \? \.grant : \.prompt/);
+  assert.match(viewController, /decisionHandler\(isTrusted \? \.grant : \.deny\)/);
+  assert.match(viewController, /message\.frameInfo\.isMainFrame/);
+  assert.match(viewController, /message\.frameInfo\.securityOrigin/);
+  assert.match(viewController, /isTrustedOrigin\(scheme: origin\.protocol, host: origin\.host\)/);
+  assert.match(viewController, /decidePolicyFor navigationAction/);
+  assert.match(viewController, /if isTrustedWebURL\(url\)/);
+  assert.match(viewController, /decisionHandler\(\.cancel\)/);
   assert.match(appDelegate, /\.playAndRecord/);
   assert.match(appDelegate, /mode: \.videoChat/);
   assert.match(
