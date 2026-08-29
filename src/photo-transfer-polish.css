@@ -39,7 +39,11 @@
   min-height: 138px;
   color: #fff;
   background:
-    radial-gradient(circle at 50% 44%, rgba(91, 80, 210, 0.14), transparent 42%),
+    radial-gradient(
+      circle at 50% 44%,
+      rgba(91, 80, 210, 0.14),
+      transparent 42%
+    ),
     linear-gradient(180deg, rgba(8, 10, 17, 0.14), rgba(8, 10, 17, 0.46));
   backdrop-filter: blur(2.5px);
   -webkit-backdrop-filter: blur(2.5px);
@@ -102,11 +106,16 @@
 }
 
 .chat-upload-bubble.is-complete .chat-upload-mask {
-  animation: auroraPhotoMaskOut 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms forwards;
+  animation: auroraPhotoMaskOut 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms
+    forwards;
 }
 
 .chat-upload-bubble.is-failed .chat-upload-mask {
-  background: linear-gradient(180deg, rgba(20, 11, 17, 0.24), rgba(20, 11, 17, 0.58));
+  background: linear-gradient(
+    180deg,
+    rgba(20, 11, 17, 0.24),
+    rgba(20, 11, 17, 0.58)
+  );
 }
 
 .chat-media-frame[data-media-kind="image"] {
@@ -129,7 +138,11 @@
   overflow: hidden;
   color: rgba(238, 240, 249, 0.78);
   background:
-    radial-gradient(circle at 30% 18%, rgba(120, 108, 255, 0.13), transparent 34%),
+    radial-gradient(
+      circle at 30% 18%,
+      rgba(120, 108, 255, 0.13),
+      transparent 34%
+    ),
     linear-gradient(145deg, #1a1d26, #151820);
 }
 
@@ -184,18 +197,22 @@
 }
 
 .chat-media-frame[data-media-kind="image"].is-loaded > img,
-.chat-media-frame[data-media-kind="image"][data-optimistic-handoff="true"] > img,
-.chat-media-frame[data-media-kind="image"][data-optimistic-handoff="done"] > img {
+.chat-media-frame[data-media-kind="image"][data-optimistic-handoff="true"]
+  > img,
+.chat-media-frame[data-media-kind="image"][data-optimistic-handoff="done"]
+  > img {
   opacity: 1;
   transform: scale(1);
   animation: auroraPhotoReveal 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.chat-media-frame[data-media-kind="image"][data-storage-failed="true"] .chat-media-skeleton {
+.chat-media-frame[data-media-kind="image"][data-storage-failed="true"]
+  .chat-media-skeleton {
   background: linear-gradient(145deg, #1a1d26, #151820);
 }
 
-.chat-media-frame[data-media-kind="image"][data-storage-failed="true"] .chat-media-spinner {
+.chat-media-frame[data-media-kind="image"][data-storage-failed="true"]
+  .chat-media-spinner {
   animation-duration: 1.35s;
   opacity: 0.72;
 }
