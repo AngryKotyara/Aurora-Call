@@ -1,4 +1,4 @@
-const CACHE = "aurora-shell-v5";
+const CACHE = "aurora-shell-v6";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
