@@ -3,8 +3,7 @@ import { rpc } from "./api.js";
 import { state } from "./state.js";
 import { escapeHtml, showToast } from "./utils.js";
 
-const EDGE_URL =
-  "https://taqpirplpmjihmkztwlv.supabase.co/functions/v1/aurora-chat-media";
+const EDGE_URL = `${config.functionsBaseUrl}aurora-chat-media`;
 const CHUNK_SIZE = 6 * 1024 * 1024;
 const MAX_BYTES = 1024 * 1024 * 1024;
 const RETRIES = [0, 1000, 3000, 5000, 10000, 20000];
@@ -60,7 +59,6 @@ async function edge(body) {
   const response = await fetch(EDGE_URL, {
     method: "POST",
     headers: {
-      apikey: config.supabasePublishableKey,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
