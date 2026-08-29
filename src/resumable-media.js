@@ -255,7 +255,10 @@ function keepPreviewUntilHandoff(ui) {
     observer.disconnect();
     release();
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
   window.addEventListener("pagehide", release, { once: true });
 }
 
