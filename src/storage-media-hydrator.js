@@ -1,8 +1,7 @@
 import { config } from "./config.js";
 import { state } from "./state.js";
 
-const EDGE_URL =
-  "https://taqpirplpmjihmkztwlv.supabase.co/functions/v1/aurora-chat-media";
+const EDGE_URL = `${config.functionsBaseUrl}aurora-chat-media`;
 const SIGNED_URL_TTL_MS = 12 * 60 * 1000;
 const RETRY_DELAYS = [0, 350, 1000];
 const cache = new Map();
@@ -46,7 +45,6 @@ async function getSignedUrl(messageId, { force = false } = {}) {
         const response = await fetch(EDGE_URL, {
           method: "POST",
           headers: {
-            apikey: config.supabasePublishableKey,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
