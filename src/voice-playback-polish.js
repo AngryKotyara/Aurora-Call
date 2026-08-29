@@ -1,7 +1,5 @@
-const PLAY_ICON =
-  '<svg viewBox="0 0 24 24"><path d="m9 6 9 6-9 6z"/></svg>';
-const PAUSE_ICON =
-  '<svg viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg>';
+const PLAY_ICON = '<svg viewBox="0 0 24 24"><path d="m9 6 9 6-9 6z"/></svg>';
+const PAUSE_ICON = '<svg viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg>';
 
 const visualState = new WeakMap();
 const activeAudio = new Set();
