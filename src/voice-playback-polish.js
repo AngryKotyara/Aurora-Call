@@ -104,7 +104,8 @@ function stopTracking(audio, reset = false) {
 
 function isVoiceAudio(target) {
   return (
-    target instanceof HTMLAudioElement && target.matches("audio[data-aurora-voice]")
+    target instanceof HTMLAudioElement &&
+    target.matches("audio[data-aurora-voice]")
   );
 }
 
