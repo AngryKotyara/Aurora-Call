@@ -99,7 +99,8 @@ async function getImageBlobUrl(messageId, signedUrl, { force = false } = {}) {
       cache: "force-cache",
       credentials: "omit",
     });
-    if (!response.ok) throw mediaError(`image_fetch_${response.status}`, response.status);
+    if (!response.ok)
+      throw mediaError(`image_fetch_${response.status}`, response.status);
     const blob = await response.blob();
     if (!blob.size) throw mediaError("image_empty");
     if (blob.type && !blob.type.startsWith("image/"))
@@ -259,8 +260,10 @@ async function hydrate(frame, { force = false } = {}) {
     try {
       await reveal(frame, signedUrl, id, { force });
     } catch (error) {
-      if (!String(error?.code || "").includes("load_failed") &&
-          !String(error?.code || "").startsWith("image_fetch_"))
+      if (
+        !String(error?.code || "").includes("load_failed") &&
+        !String(error?.code || "").startsWith("image_fetch_")
+      )
         throw error;
       signedUrlCache.delete(id);
       revokeImageBlob(id);
