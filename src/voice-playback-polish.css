@@ -1,0 +1,145 @@
+.voice-wave::after {
+  display: none !important;
+  content: none !important;
+}
+
+.voice-wave {
+  gap: 2.4px;
+  padding: 0 2px;
+  overflow: visible;
+}
+
+.voice-wave i {
+  opacity: 0.46;
+  transform: scaleY(0.86);
+  transform-origin: center;
+  transition:
+    background-color 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.18s ease;
+  will-change: transform, opacity;
+}
+
+.outgoing .voice-wave i {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.incoming .voice-wave i {
+  background: rgba(140, 134, 165, 0.68);
+}
+
+.outgoing .voice-wave i.voice-bar-played {
+  background: rgba(255, 255, 255, 0.98);
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.incoming .voice-wave i.voice-bar-played {
+  background: #7868ff;
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.voice-wave i.voice-bar-current {
+  opacity: 1;
+  transform: scaleY(1.12);
+}
+
+.outgoing .voice-wave i.voice-bar-current {
+  background: #fff;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.42));
+}
+
+.incoming .voice-wave i.voice-bar-current {
+  background: #8b7cff;
+  filter: drop-shadow(0 0 4px rgba(120, 104, 255, 0.4));
+}
+
+.voice-wave.is-playing i.voice-bar-current {
+  animation: voice-playback-head 0.62s ease-in-out infinite alternate;
+}
+
+.voice-player > button {
+  position: relative;
+  overflow: visible;
+  isolation: isolate;
+  transition:
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.voice-player > button::after {
+  position: absolute;
+  inset: -4px;
+  z-index: -1;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.84);
+}
+
+.voice-player.is-playing > button::after {
+  animation: voice-control-ring 1.45s ease-out infinite;
+}
+
+.voice-player > button:active {
+  transform: scale(0.9);
+}
+
+.voice-player > button svg {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.voice-player.is-playing > button svg {
+  transform: scale(0.92);
+}
+
+.voice-duration {
+  min-width: 36px;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  transition: opacity 0.16s ease;
+}
+
+.voice-player.is-playing .voice-duration {
+  opacity: 0.96;
+}
+
+@keyframes voice-playback-head {
+  from {
+    transform: scaleY(0.94);
+  }
+  to {
+    transform: scaleY(1.16);
+  }
+}
+
+@keyframes voice-control-ring {
+  0% {
+    opacity: 0.24;
+    transform: scale(0.88);
+  }
+  72%,
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-wave i,
+  .voice-player > button,
+  .voice-player > button svg,
+  .voice-duration {
+    transition: none !important;
+  }
+
+  .voice-wave.is-playing i.voice-bar-current,
+  .voice-player.is-playing > button::after {
+    animation: none !important;
+  }
+}
