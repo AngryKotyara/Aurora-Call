@@ -174,7 +174,8 @@ async function updateAvatar(file) {
     const messages = {
       invalid_avatar_type: "Выберите изображение",
       avatar_too_large: "Исходное фото должно быть не больше 8 МБ",
-      unsupported_image: "Этот формат изображения не поддерживается устройством",
+      unsupported_image:
+        "Этот формат изображения не поддерживается устройством",
       avatar_processing_failed: "Не удалось обработать фото",
       invalid_avatar: "Сервер отклонил изображение",
       invalid_session: "Сессия истекла. Войдите снова",

@@ -2,7 +2,9 @@ const BACK_ICON =
   '<svg class="aurora-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
 
 function polishChatNavigation() {
-  const topbar = document.querySelector("#chat-layer .chat-list-view .chat-topbar");
+  const topbar = document.querySelector(
+    "#chat-layer .chat-list-view .chat-topbar",
+  );
   const back = topbar?.querySelector("[data-chat-close]");
   if (!topbar || !back || back.dataset.mainMenuBack === "true") return;
 

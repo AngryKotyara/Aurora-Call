@@ -140,10 +140,16 @@ test("native iOS wrapper keeps media permission, background audio, atomic Replay
 
   assert.match(viewController, /WKUIDelegate/);
   assert.match(viewController, /requestMediaCapturePermissionFor/);
-  assert.match(viewController, /decisionHandler\(isTrusted \? \.grant : \.deny\)/);
+  assert.match(
+    viewController,
+    /decisionHandler\(isTrusted \? \.grant : \.deny\)/,
+  );
   assert.match(viewController, /message\.frameInfo\.isMainFrame/);
   assert.match(viewController, /message\.frameInfo\.securityOrigin/);
-  assert.match(viewController, /isTrustedOrigin\(scheme: origin\.protocol, host: origin\.host\)/);
+  assert.match(
+    viewController,
+    /isTrustedOrigin\(scheme: origin\.protocol, host: origin\.host\)/,
+  );
   assert.match(viewController, /decidePolicyFor navigationAction/);
   assert.match(viewController, /if isTrustedWebURL\(url\)/);
   assert.match(viewController, /decisionHandler\(\.cancel\)/);

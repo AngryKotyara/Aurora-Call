@@ -149,7 +149,11 @@ function installFriendAvatars(friends) {
   document.querySelectorAll("[data-select]").forEach((card) => {
     const friend = friendById.get(String(card.dataset.select || ""));
     if (friend)
-      setAvatarVisual(card.querySelector(".av"), friend.username, friend.avatar);
+      setAvatarVisual(
+        card.querySelector(".av"),
+        friend.username,
+        friend.avatar,
+      );
   });
 
   document.querySelectorAll(".friend-row .av").forEach((avatar, index) => {
