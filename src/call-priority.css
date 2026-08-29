@@ -1,0 +1,23 @@
+/* Calls are system-priority UI: they must stay above chat, media viewers, menus and toasts. */
+#call-modal.call-screen {
+  z-index: 100000 !important;
+}
+
+.incoming-call-layer {
+  z-index: 100100 !important;
+}
+
+/* Chat list uses a conventional leading Back control to return to the main UI. */
+.chat-list-view .chat-topbar {
+  justify-content: flex-start;
+}
+
+.chat-list-view .chat-topbar > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-list-view .chat-topbar [data-chat-close] {
+  flex: 0 0 42px;
+  order: -1;
+}
