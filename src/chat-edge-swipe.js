@@ -36,26 +36,40 @@ export function shouldCompleteChatBackSwipe({
   );
 }
 
-export function installChatEdgeSwipe(target, onBack) {
-  if (!(target instanceof HTMLElement) || typeof onBack !== "function") return;
+export function installEdgeSwipeBack(
+  eventSurface,
+  onBack,
+  { visualTarget = eventSurface, host = visualTarget?.parentElement } = {},
+) {
+  if (
+    !eventSurface?.addEventListener ||
+    !visualTarget?.classList ||
+    typeof onBack !== "function"
+  )
+    return;
 
-  const layer = target.closest(".chat-layer");
   let gesture = null;
   let navigationTimer = null;
 
   const clearVisuals = () => {
-    target.classList.remove("is-chat-edge-swiping", "is-chat-edge-settling");
-    target.style.removeProperty("--chat-back-x");
-    layer?.classList.remove("chat-back-gesture-active");
-    layer?.style.removeProperty("--chat-back-progress");
+    visualTarget.classList.remove(
+      "is-edge-back-swiping",
+      "is-edge-back-settling",
+    );
+    visualTarget.style.removeProperty("--edge-back-x");
+    host?.classList.remove("edge-back-gesture-active");
+    host?.style.removeProperty("--edge-back-progress");
   };
 
   const setProgress = (distance) => {
-    const width = Math.max(1, target.clientWidth || window.innerWidth || 1);
+    const width = Math.max(
+      1,
+      visualTarget.clientWidth || window.innerWidth || 1,
+    );
     const visibleDistance = Math.min(width, Math.max(0, distance));
     const progress = Math.min(1, visibleDistance / chatBackThreshold(width));
-    target.style.setProperty("--chat-back-x", `${visibleDistance}px`);
-    layer?.style.setProperty("--chat-back-progress", progress.toFixed(3));
+    visualTarget.style.setProperty("--edge-back-x", `${visibleDistance}px`);
+    host?.style.setProperty("--edge-back-progress", progress.toFixed(3));
   };
 
   const settle = (complete) => {
@@ -64,10 +78,13 @@ export function installChatEdgeSwipe(target, onBack) {
       return;
     }
 
-    const width = Math.max(1, target.clientWidth || window.innerWidth || 1);
+    const width = Math.max(
+      1,
+      visualTarget.clientWidth || window.innerWidth || 1,
+    );
     gesture = null;
-    target.classList.remove("is-chat-edge-swiping");
-    target.classList.add("is-chat-edge-settling");
+    visualTarget.classList.remove("is-edge-back-swiping");
+    visualTarget.classList.add("is-edge-back-settling");
 
     if (!complete) {
       setProgress(0);
@@ -75,24 +92,24 @@ export function installChatEdgeSwipe(target, onBack) {
       return;
     }
 
-    target.style.setProperty("--chat-back-x", `${width}px`);
-    layer?.style.setProperty("--chat-back-progress", "1");
+    visualTarget.style.setProperty("--edge-back-x", `${width}px`);
+    host?.style.setProperty("--edge-back-progress", "1");
     navigationTimer = window.setTimeout(() => {
       Promise.resolve()
         .then(onBack)
-        .catch((error) => console.error("Chat swipe back failed", error))
+        .catch((error) => console.error("Swipe back navigation failed", error))
         .finally(clearVisuals);
     }, CHAT_BACK_SETTLE_MS);
   };
 
-  target.addEventListener(
+  eventSurface.addEventListener(
     "touchstart",
     (event) => {
       if (
         event.touches.length !== 1 ||
-        target.classList.contains("is-chat-edge-settling") ||
+        visualTarget.classList.contains("is-edge-back-settling") ||
         document.querySelector(
-          ".chat-viewer, .chat-message-menu-backdrop, .call-screen",
+          ".chat-viewer, .chat-message-menu-backdrop, .call-screen, .modal",
         )
       )
         return;
@@ -111,7 +128,7 @@ export function installChatEdgeSwipe(target, onBack) {
     { passive: true },
   );
 
-  target.addEventListener(
+  eventSurface.addEventListener(
     "touchmove",
     (event) => {
       if (!gesture || event.touches.length !== 1) return;
@@ -126,8 +143,8 @@ export function installChatEdgeSwipe(target, onBack) {
         }
         if (!isChatBackIntent(deltaX, deltaY)) return;
         gesture.active = true;
-        target.classList.add("is-chat-edge-swiping");
-        layer?.classList.add("chat-back-gesture-active");
+        visualTarget.classList.add("is-edge-back-swiping");
+        host?.classList.add("edge-back-gesture-active");
       }
 
       event.preventDefault();
@@ -137,15 +154,22 @@ export function installChatEdgeSwipe(target, onBack) {
     { passive: false },
   );
 
-  target.addEventListener("touchend", () => {
+  eventSurface.addEventListener("touchend", () => {
     if (!gesture) return;
     const complete = shouldCompleteChatBackSwipe({
       distance: gesture.distance,
       duration: Date.now() - gesture.startedAt,
-      viewportWidth: target.clientWidth || window.innerWidth,
+      viewportWidth: visualTarget.clientWidth || window.innerWidth,
     });
     settle(complete);
   });
 
-  target.addEventListener("touchcancel", () => settle(false));
+  eventSurface.addEventListener("touchcancel", () => settle(false));
+}
+
+export function installChatEdgeSwipe(target, onBack) {
+  return installEdgeSwipeBack(target, onBack, {
+    visualTarget: target,
+    host: target?.closest?.(".chat-layer"),
+  });
 }

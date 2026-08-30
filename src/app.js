@@ -3,7 +3,7 @@ import { prepareAvatar, installProfileAvatar } from "./profile-avatar.js";
 import { applyBranding } from "./branding.js";
 import { pickCallContact } from "./call-picker.js";
 import { startCall, startSignalPolling } from "./calls.js";
-import { initChat } from "./chat.js?v=20260830-edge-back1";
+import { initChat } from "./chat.js?v=20260830-edge-back2";
 import { installIncomingCallAlerting } from "./incoming-call.js";
 import {
   disableMediaAccess,

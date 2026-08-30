@@ -103,6 +103,49 @@ test("granted media access can be switched off in settings", () => {
   );
 });
 
+test("edge swipe is enabled on secondary menus but not on the home screen", () => {
+  const options = {
+    session: { username: "aurora_preview" },
+    friends: [],
+    callHistory: [],
+    mediaPermission: { status: "granted" },
+    onNavigate: () => {},
+    onSelectFriend: () => {},
+    onCall: () => {},
+    onGenerateInvite: () => {},
+    onDeleteFriend: () => {},
+    onRequestMediaAccess: () => {},
+    onLogout: () => {},
+  };
+  const dispatchTouch = (target, type, touches) => {
+    const event = new window.Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "touches", { value: touches });
+    target.dispatchEvent(event);
+  };
+
+  renderMain({ ...options, activeScreen: "settings" });
+  const settingsApp = document.querySelector(".app");
+  dispatchTouch(settingsApp, "touchstart", [{ clientX: 4, clientY: 180 }]);
+  dispatchTouch(settingsApp, "touchmove", [{ clientX: 120, clientY: 184 }]);
+  assert.equal(
+    document
+      .querySelector(".screen.on")
+      .classList.contains("is-edge-back-swiping"),
+    true,
+  );
+
+  renderMain({ ...options, activeScreen: "home" });
+  const homeApp = document.querySelector(".app");
+  dispatchTouch(homeApp, "touchstart", [{ clientX: 4, clientY: 180 }]);
+  dispatchTouch(homeApp, "touchmove", [{ clientX: 120, clientY: 184 }]);
+  assert.equal(
+    document
+      .querySelector(".screen.on")
+      .classList.contains("is-edge-back-swiping"),
+    false,
+  );
+});
+
 test("video calls use a full-screen stage with screen sharing controls", async () => {
   let microphoneEnabled = true;
   let cameraEnabled = true;

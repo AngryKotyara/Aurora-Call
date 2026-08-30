@@ -171,6 +171,7 @@ async function renderThreads() {
   const threads = await getThreads();
   layer.innerHTML = `<section class="chat-shell chat-list-view"><header class="chat-topbar"><div><span class="chat-kicker">Aurora Call</span><h1>Чаты</h1></div><button class="chat-icon-btn" data-chat-close aria-label="Закрыть">${icon("close")}</button></header><div class="chat-search-wrap"><input class="chat-search" type="search" placeholder="Поиск" aria-label="Поиск по чатам"></div><div class="chat-thread-list">${threads.length ? threads.map(threadRow).join("") : '<div class="chat-empty"><span>💬</span><b>Сообщений пока нет</b><p>Откройте друга и нажмите «Сообщение».</p></div>'}</div></section>`;
   layer.querySelector("[data-chat-close]").onclick = closeChat;
+  installChatEdgeSwipe(layer.querySelector(".chat-list-view"), closeChat);
   layer.querySelector(".chat-search").oninput = (event) => {
     const q = event.target.value.toLowerCase().trim();
     layer

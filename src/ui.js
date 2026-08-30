@@ -1,5 +1,6 @@
 import { escapeHtml, formatCallDate, query } from "./utils.js";
 import { logoUrl } from "./branding.js";
+import { installEdgeSwipeBack } from "./chat-edge-swipe.js";
 import { mountXperiaFlow } from "./xperia-flow.js";
 
 const root = document.getElementById("root");
@@ -198,6 +199,13 @@ export function renderMain({
       '<div class="card empty-state"><span aria-hidden="true">◷</span><b>История пока пуста</b><p class="muted">Здесь появятся входящие и исходящие звонки.</p></div>';
   root.innerHTML = `<main class="app"><section class="screen ${activeScreen === "home" ? "on" : ""}"><header class="home-hero"><div class="home-copy">${brandLockup("hero-brand")}<h1>Звонки</h1><p>Выберите друга и начните разговор.</p></div>${auroraWaves()}</header>${mediaPermission?.status === "granted" ? "" : mediaAccessCard(mediaPermission, true)}<div class="grid"><button id="audio" class="call">☎<br />Аудиозвонок</button><button id="video" class="call video">▣<br />Видеозвонок</button></div><h2>Друзья</h2>${callFriends}</section><section class="screen ${activeScreen === "history" ? "on" : ""}"><div class="section-heading"><div><span class="eyebrow">Последние события</span><h1>История звонков</h1></div><span class="history-count" aria-label="Звонков в истории: ${callHistory.length}">${callHistory.length}</span></div>${historyItems}</section><section class="screen ${activeScreen === "friends" ? "on" : ""}"><h1>Друзья</h1>${allFriends}</section><section class="screen ${activeScreen === "settings" ? "on" : ""}"><h1>Настройки</h1><div class="card"><span class="muted">Имя пользователя</span><h2>${escapeHtml(session.username)}</h2></div>${mediaAccessCard(mediaPermission)}<div class="card"><h2>QR-приглашение</h2><p class="muted">Одноразовое приглашение.</p><button id="generate-invite" class="btn">Создать QR</button><div id="invite"></div></div><button id="logout" class="btn ghost">Выйти</button></section>${navigation(activeScreen)}</main>`;
   mountXperiaFlow(root);
+  if (activeScreen !== "home") {
+    const app = root.querySelector(".app");
+    installEdgeSwipeBack(app, () => onNavigate("home"), {
+      visualTarget: app?.querySelector(".screen.on"),
+      host: app,
+    });
+  }
   document
     .querySelectorAll("[data-nav]")
     .forEach((b) =>

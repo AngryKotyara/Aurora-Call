@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -48,5 +49,21 @@ test("chat back completes by distance or a deliberate quick flick", () => {
       viewportWidth,
     }),
     false,
+  );
+});
+
+test("chat list and conversation both install the edge back gesture", () => {
+  const source = readFileSync(
+    new URL("../src/chat.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /installChatEdgeSwipe\(layer\.querySelector\("\.chat-list-view"\), closeChat\)/,
+  );
+  assert.match(
+    source,
+    /installChatEdgeSwipe\([\s\S]*?\.chat-conversation-view[\s\S]*?returnToThreads/,
   );
 });
