@@ -774,9 +774,49 @@
 
 /* Modern chat scrolling: messages keep their natural size and the timeline scrolls vertically. */
 .chat-conversation-view {
+  --chat-back-x: 0px;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
+  transform: translate3d(var(--chat-back-x), 0, 0);
+}
+.chat-conversation-view.is-chat-edge-swiping {
+  transition: none;
+  will-change: transform;
+  box-shadow: -18px 0 42px rgba(0, 0, 0, 0.34);
+}
+.chat-conversation-view.is-chat-edge-settling {
+  transition: transform 180ms cubic-bezier(0.22, 0.78, 0.24, 1);
+  will-change: transform;
+  pointer-events: none;
+  box-shadow: -18px 0 42px rgba(0, 0, 0, 0.34);
+}
+.chat-layer.chat-back-gesture-active::before {
+  content: "‹";
+  position: fixed;
+  top: 50%;
+  left: max(10px, env(safe-area-inset-left));
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  background: rgba(99, 94, 255, 0.2);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 34px;
+  font-weight: 300;
+  line-height: 1;
+  opacity: var(--chat-back-progress, 0);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-conversation-view.is-chat-edge-settling {
+    transition-duration: 1ms;
+  }
 }
 .chat-conversation-header,
 .chat-composer {

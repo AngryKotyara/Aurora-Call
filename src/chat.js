@@ -3,6 +3,7 @@ import {
   LEGACY_MEDIA_FRAME_SELECTOR,
   mediaRoutingAttribute,
 } from "./chat-media-routing.js";
+import { installChatEdgeSwipe } from "./chat-edge-swipe.js";
 import { state } from "./state.js";
 import { escapeHtml, showToast } from "./utils.js";
 
@@ -451,10 +452,16 @@ async function renderConversation() {
   requestAnimationFrame(() => {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   });
-  layer.querySelector("[data-chat-back]").onclick = () => {
+  const returnToThreads = () => {
     openedFriend = null;
-    void renderThreads();
+    return renderThreads();
   };
+  layer.querySelector("[data-chat-back]").onclick = () =>
+    void returnToThreads();
+  installChatEdgeSwipe(
+    layer.querySelector(".chat-conversation-view"),
+    returnToThreads,
+  );
   layer.querySelector("[data-chat-attach]").onclick = () =>
     layer.querySelector(".chat-file").click();
   layer.querySelector(".chat-file").onchange = (event) =>
