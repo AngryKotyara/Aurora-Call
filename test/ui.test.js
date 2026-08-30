@@ -64,7 +64,10 @@ test("main screen renders the logo, waves, history, and friend removal controls"
   assert.match(document.querySelector(".history-row").textContent, /Отклонён/);
   assert.equal(document.querySelectorAll("[data-request-media]").length, 2);
 
+  const appBeforeNavigation = document.querySelector(".app");
   document.querySelector('[data-nav="history"]').click();
+  assert.equal(document.querySelector(".app"), appBeforeNavigation);
+  assert.equal(document.querySelector(".screen.on")?.dataset.screen, "history");
   document.querySelector("[data-delete-friend]").click();
   document.querySelector("[data-request-media]").click();
 

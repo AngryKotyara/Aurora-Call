@@ -2,7 +2,7 @@
 // Keep startup order explicit: core app first, then UI/features that observe it.
 import "./media-compression-hook.js";
 import "./resumable-media.js?v=20260830-media3";
-import "./app.js?v=20260830-edge-back2";
+import "./app.js?v=20260830-perf1";
 import "./auth-screen.js?v=20260818-android-auth2";
 import "./auth-screen-polish.js?v=20260818-android-auth2";
 import "./android-auth-bridge.js?v=20260818-android-auth2";
@@ -19,7 +19,17 @@ import "./chat-call-priority.js?v=20260829-chat4";
 import "./chat-delete-resilience.js";
 import "./interaction-polish.js";
 import "./permission-check-animation.js?v=20260815-permissions2";
-import { initPushNotifications } from "./push-notifications.js?v=20260815-push1";
+import { initPushNotifications } from "./push-notifications.js?v=20260830-perf1";
+
+function syncPageActivity() {
+  document.documentElement.classList.toggle(
+    "app-backgrounded",
+    document.visibilityState === "hidden",
+  );
+}
+
+document.addEventListener("visibilitychange", syncPageActivity);
+syncPageActivity();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", async () => {

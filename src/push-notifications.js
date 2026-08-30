@@ -1,10 +1,32 @@
 import { config } from "./config.js";
+import { PUSH_SUBSCRIPTION_SYNC_MS, pushSyncDue } from "./polling-policy.js";
 import { state } from "./state.js";
 import { showToast } from "./utils.js";
 
 const VAPID_PUBLIC_KEY =
   "BMNFI7gc9X-oOOTXoFTRW2oulzz68swL5TOTK5g6EIR_svfw8BHXLG1u3sSMPaj_fxQ2B2XDpPP7jj4qO86chDU";
+const PUSH_DISABLED_KEY = "aurora_push_disabled";
 let syncInFlight = null;
+let lastSubscriptionSyncAt = 0;
+let maintenanceTimer = null;
+let pushObserver = null;
+
+function notificationsOptedOut() {
+  try {
+    return localStorage.getItem(PUSH_DISABLED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setNotificationsOptedOut(disabled) {
+  try {
+    if (disabled) localStorage.setItem(PUSH_DISABLED_KEY, "1");
+    else localStorage.removeItem(PUSH_DISABLED_KEY);
+  } catch {
+    // Notification controls still work when storage is unavailable.
+  }
+}
 
 function base64UrlToUint8Array(value) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
@@ -54,6 +76,7 @@ async function ensureSubscription() {
   if (
     !supported() ||
     Notification.permission !== "granted" ||
+    notificationsOptedOut() ||
     !state.session?.token
   )
     return null;
@@ -72,6 +95,7 @@ async function ensureSubscription() {
       subscription: subscription.toJSON(),
       user_agent: navigator.userAgent,
     });
+    lastSubscriptionSyncAt = Date.now();
     return subscription;
   })().finally(() => {
     syncInFlight = null;
@@ -98,6 +122,7 @@ async function enableNotifications() {
     return;
   }
   try {
+    setNotificationsOptedOut(false);
     await ensureSubscription();
     showToast("Фоновые уведомления включены", true);
   } catch (error) {
@@ -109,6 +134,8 @@ async function enableNotifications() {
 
 async function disableNotifications() {
   if (!supported()) return;
+  setNotificationsOptedOut(true);
+  lastSubscriptionSyncAt = 0;
   try {
     const registration = await getRegistration();
     const subscription = await registration.pushManager.getSubscription();
@@ -149,13 +176,20 @@ function cardCopy() {
       action: "Заблокировано",
       disabled: true,
     };
-  if (Notification.permission === "granted")
+  if (Notification.permission === "granted" && !notificationsOptedOut())
     return {
       title: "Фоновые уведомления включены",
       text: "Aurora Call сможет сообщать о новых сообщениях и входящих звонках, когда приложение закрыто.",
       action: "Выключить уведомления",
       disabled: false,
       enabled: true,
+    };
+  if (Notification.permission === "granted")
+    return {
+      title: "Фоновые уведомления выключены",
+      text: "Aurora Call не будет отправлять push-уведомления на это устройство.",
+      action: "Включить уведомления",
+      disabled: false,
     };
   return {
     title: "Уведомления о звонках и сообщениях",
@@ -221,19 +255,60 @@ function handlePushLaunch() {
   }
 }
 
-export function initPushNotifications() {
+async function runMaintenance() {
   renderPushCard();
+  if (
+    document.visibilityState === "hidden" ||
+    !supported() ||
+    Notification.permission !== "granted" ||
+    notificationsOptedOut() ||
+    !state.session ||
+    !pushSyncDue(lastSubscriptionSyncAt)
+  )
+    return;
+  try {
+    await ensureSubscription();
+  } catch (error) {
+    console.warn("Push subscription maintenance failed", error);
+  }
+}
+
+function scheduleMaintenance(delay = 180) {
+  if (maintenanceTimer !== null) window.clearTimeout(maintenanceTimer);
+  maintenanceTimer = window.setTimeout(
+    async () => {
+      maintenanceTimer = null;
+      await runMaintenance();
+      if (
+        supported() &&
+        Notification.permission === "granted" &&
+        !notificationsOptedOut() &&
+        state.session
+      ) {
+        const elapsed = Date.now() - lastSubscriptionSyncAt;
+        scheduleMaintenance(
+          Math.max(5 * 60_000, PUSH_SUBSCRIPTION_SYNC_MS - elapsed),
+        );
+      }
+    },
+    Math.max(0, delay),
+  );
+}
+
+export function initPushNotifications() {
+  scheduleMaintenance(0);
   const root = document.getElementById("root");
-  if (root)
-    new MutationObserver(renderPushCard).observe(root, {
+  if (root && !pushObserver) {
+    pushObserver = new MutationObserver(() => scheduleMaintenance());
+    pushObserver.observe(root, {
       childList: true,
       subtree: true,
     });
-  window.setInterval(() => {
-    renderPushCard();
-    if (supported() && Notification.permission === "granted" && state.session)
-      void ensureSubscription().catch(() => {});
-  }, 5000);
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden") scheduleMaintenance(0);
+  });
+  window.addEventListener("online", () => scheduleMaintenance(0));
   window.setTimeout(handlePushLaunch, 600);
   navigator.serviceWorker?.addEventListener("message", (event) => {
     if (event.data?.type === "aurora-push-open" && event.data.url)

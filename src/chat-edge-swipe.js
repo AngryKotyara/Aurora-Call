@@ -1,10 +1,10 @@
-export const CHAT_BACK_EDGE_PX = 32;
-export const CHAT_BACK_SETTLE_MS = 180;
+export const CHAT_BACK_EDGE_PX = 48;
+export const CHAT_BACK_SETTLE_MS = 210;
 
-const DRAG_INTENT_PX = 8;
-const HORIZONTAL_AXIS_RATIO = 1.25;
-const FLING_DISTANCE_PX = 38;
-const FLING_VELOCITY_PX_MS = 0.5;
+const DRAG_INTENT_PX = 5;
+const HORIZONTAL_AXIS_RATIO = 1.08;
+const FLING_DISTANCE_PX = 28;
+const FLING_VELOCITY_PX_MS = 0.34;
 
 export function isChatBackEdgeStart(point, edgeSize = CHAT_BACK_EDGE_PX) {
   const x = Number(point?.clientX);
@@ -19,7 +19,7 @@ export function isChatBackIntent(deltaX, deltaY) {
 
 export function chatBackThreshold(viewportWidth) {
   const width = Math.max(0, Number(viewportWidth) || 0);
-  return Math.min(112, Math.max(76, width * 0.26));
+  return Math.min(96, Math.max(64, width * 0.2));
 }
 
 export function shouldCompleteChatBackSwipe({
@@ -39,37 +39,62 @@ export function shouldCompleteChatBackSwipe({
 export function installEdgeSwipeBack(
   eventSurface,
   onBack,
-  { visualTarget = eventSurface, host = visualTarget?.parentElement } = {},
+  {
+    visualTarget = eventSurface,
+    getVisualTarget = null,
+    host = visualTarget?.parentElement,
+    canStart = () => true,
+  } = {},
 ) {
-  if (
-    !eventSurface?.addEventListener ||
-    !visualTarget?.classList ||
-    typeof onBack !== "function"
-  )
-    return;
+  if (!eventSurface?.addEventListener || typeof onBack !== "function") return;
 
   let gesture = null;
-  let navigationTimer = null;
+  let animationFrame = null;
+  let pendingProgress = null;
+  let settleTimer = null;
 
-  const clearVisuals = () => {
-    visualTarget.classList.remove(
-      "is-edge-back-swiping",
-      "is-edge-back-settling",
-    );
-    visualTarget.style.removeProperty("--edge-back-x");
-    host?.classList.remove("edge-back-gesture-active");
-    host?.style.removeProperty("--edge-back-progress");
+  const resolveTarget = () => getVisualTarget?.() || visualTarget;
+  const resolveHost = (target) =>
+    typeof host === "function" ? host(target) : host || target?.parentElement;
+  const requestFrame = (callback) =>
+    window.requestAnimationFrame?.(callback) ?? window.setTimeout(callback, 16);
+  const cancelFrame = (frame) => {
+    if (window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
+    else window.clearTimeout(frame);
   };
 
-  const setProgress = (distance) => {
-    const width = Math.max(
-      1,
-      visualTarget.clientWidth || window.innerWidth || 1,
-    );
+  const clearVisuals = (target, targetHost) => {
+    if (!target) return;
+    target.classList.remove("is-edge-back-swiping", "is-edge-back-settling");
+    target.style.removeProperty("--edge-back-x");
+    targetHost?.classList.remove("edge-back-gesture-active");
+    targetHost?.style.removeProperty("--edge-back-progress");
+  };
+
+  const setProgress = (target, targetHost, distance) => {
+    const width = Math.max(1, target.clientWidth || window.innerWidth || 1);
     const visibleDistance = Math.min(width, Math.max(0, distance));
     const progress = Math.min(1, visibleDistance / chatBackThreshold(width));
-    visualTarget.style.setProperty("--edge-back-x", `${visibleDistance}px`);
-    host?.style.setProperty("--edge-back-progress", progress.toFixed(3));
+    target.style.setProperty("--edge-back-x", `${visibleDistance}px`);
+    targetHost?.style.setProperty("--edge-back-progress", progress.toFixed(3));
+  };
+
+  const flushProgress = () => {
+    if (!pendingProgress) return;
+    const update = pendingProgress;
+    pendingProgress = null;
+    if (animationFrame !== null) cancelFrame(animationFrame);
+    animationFrame = null;
+    setProgress(update.target, update.host, update.distance);
+  };
+
+  const queueProgress = (target, targetHost, distance) => {
+    pendingProgress = { target, host: targetHost, distance };
+    if (animationFrame !== null) return;
+    animationFrame = requestFrame(() => {
+      animationFrame = null;
+      flushProgress();
+    });
   };
 
   const settle = (complete) => {
@@ -78,46 +103,62 @@ export function installEdgeSwipeBack(
       return;
     }
 
-    const width = Math.max(
-      1,
-      visualTarget.clientWidth || window.innerWidth || 1,
-    );
+    const completed = gesture;
     gesture = null;
-    visualTarget.classList.remove("is-edge-back-swiping");
-    visualTarget.classList.add("is-edge-back-settling");
+    flushProgress();
 
-    if (!complete) {
-      setProgress(0);
-      navigationTimer = window.setTimeout(clearVisuals, CHAT_BACK_SETTLE_MS);
-      return;
-    }
+    const { target, host: targetHost } = completed;
+    const width = Math.max(1, target.clientWidth || window.innerWidth || 1);
+    target.classList.remove("is-edge-back-swiping");
+    target.classList.add("is-edge-back-settling");
+    target.getBoundingClientRect?.();
 
-    visualTarget.style.setProperty("--edge-back-x", `${width}px`);
-    host?.style.setProperty("--edge-back-progress", "1");
-    navigationTimer = window.setTimeout(() => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(settleTimer);
+      target.removeEventListener("transitionend", onTransitionEnd);
+      if (!complete) {
+        clearVisuals(target, targetHost);
+        return;
+      }
       Promise.resolve()
         .then(onBack)
         .catch((error) => console.error("Swipe back navigation failed", error))
-        .finally(clearVisuals);
-    }, CHAT_BACK_SETTLE_MS);
+        .finally(() => clearVisuals(target, targetHost));
+    };
+    const onTransitionEnd = (event) => {
+      if (event.target === target && event.propertyName === "transform")
+        finish();
+    };
+    target.addEventListener("transitionend", onTransitionEnd);
+    settleTimer = window.setTimeout(finish, CHAT_BACK_SETTLE_MS + 80);
+    requestFrame(() => setProgress(target, targetHost, complete ? width : 0));
   };
 
   eventSurface.addEventListener(
     "touchstart",
     (event) => {
+      const target = resolveTarget();
+      const targetHost = resolveHost(target);
       if (
         event.touches.length !== 1 ||
-        visualTarget.classList.contains("is-edge-back-settling") ||
+        !target?.classList ||
+        !canStart() ||
+        target.classList.contains("is-edge-back-settling") ||
         document.querySelector(
-          ".chat-viewer, .chat-message-menu-backdrop, .call-screen, .modal",
+          ".chat-viewer, .chat-message-menu-backdrop, .call-screen, .modal:not([hidden])",
         )
       )
         return;
 
       const touch = event.touches[0];
       if (!isChatBackEdgeStart(touch)) return;
-      window.clearTimeout(navigationTimer);
+      window.clearTimeout(settleTimer);
       gesture = {
+        target,
+        host: targetHost,
         startX: touch.clientX,
         startY: touch.clientY,
         startedAt: Date.now(),
@@ -131,7 +172,11 @@ export function installEdgeSwipeBack(
   eventSurface.addEventListener(
     "touchmove",
     (event) => {
-      if (!gesture || event.touches.length !== 1) return;
+      if (!gesture) return;
+      if (event.touches.length !== 1) {
+        settle(false);
+        return;
+      }
       const touch = event.touches[0];
       const deltaX = touch.clientX - gesture.startX;
       const deltaY = touch.clientY - gesture.startY;
@@ -143,23 +188,30 @@ export function installEdgeSwipeBack(
         }
         if (!isChatBackIntent(deltaX, deltaY)) return;
         gesture.active = true;
-        visualTarget.classList.add("is-edge-back-swiping");
-        host?.classList.add("edge-back-gesture-active");
+        gesture.target.classList.add("is-edge-back-swiping");
+        gesture.host?.classList.add("edge-back-gesture-active");
       }
 
       event.preventDefault();
       gesture.distance = Math.max(0, deltaX);
-      setProgress(gesture.distance);
+      queueProgress(gesture.target, gesture.host, gesture.distance);
     },
     { passive: false },
   );
 
-  eventSurface.addEventListener("touchend", () => {
+  eventSurface.addEventListener("touchend", (event) => {
     if (!gesture) return;
+    const touch = event.changedTouches?.[0];
+    if (touch) {
+      const finalX = Math.max(0, touch.clientX - gesture.startX);
+      gesture.distance = Math.max(gesture.distance, finalX);
+      if (gesture.active)
+        queueProgress(gesture.target, gesture.host, gesture.distance);
+    }
     const complete = shouldCompleteChatBackSwipe({
       distance: gesture.distance,
       duration: Date.now() - gesture.startedAt,
-      viewportWidth: visualTarget.clientWidth || window.innerWidth,
+      viewportWidth: gesture.target.clientWidth || window.innerWidth,
     });
     settle(complete);
   });

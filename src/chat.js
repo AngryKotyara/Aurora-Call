@@ -4,13 +4,20 @@ import {
   mediaRoutingAttribute,
 } from "./chat-media-routing.js";
 import { installChatEdgeSwipe } from "./chat-edge-swipe.js";
+import { chatPollDelay } from "./polling-policy.js";
 import { state } from "./state.js";
 import { escapeHtml, showToast } from "./utils.js";
 
 let openedFriend = null;
 let pollTimer = null;
 let observer = null;
-let lastThreadSignature = "";
+let initialized = false;
+let badgeRefreshInFlight = false;
+let threadFetchInFlight = null;
+let cachedThreads = [];
+let cachedThreadToken = "";
+let hasThreadCache = false;
+let lastConversationSignature = "";
 let editingMessage = null;
 let currentMessages = new Map();
 const mediaCache = new Map();
@@ -135,10 +142,36 @@ function formatThreadTime(value) {
         month: "2-digit",
       }).format(date);
 }
-async function getThreads() {
-  return state.session
-    ? rpc("list_chat_threads", { p_token: state.session.token }).catch(() => [])
-    : [];
+async function getThreads({ allowCache = false } = {}) {
+  const token = state.session?.token || "";
+  if (!token) {
+    cachedThreads = [];
+    cachedThreadToken = "";
+    hasThreadCache = false;
+    return [];
+  }
+  if (token !== cachedThreadToken) {
+    cachedThreads = [];
+    cachedThreadToken = token;
+    hasThreadCache = false;
+  }
+  if (allowCache && hasThreadCache) return cachedThreads;
+  if (threadFetchInFlight?.token === token) return threadFetchInFlight.promise;
+  const pending = { token, promise: null };
+  pending.promise = rpc("list_chat_threads", { p_token: token })
+    .then((threads) => {
+      if (state.session?.token !== token || cachedThreadToken !== token)
+        return [];
+      cachedThreads = Array.isArray(threads) ? threads : [];
+      hasThreadCache = true;
+      return cachedThreads;
+    })
+    .catch(() => (hasThreadCache ? cachedThreads : []))
+    .finally(() => {
+      if (threadFetchInFlight === pending) threadFetchInFlight = null;
+    });
+  threadFetchInFlight = pending;
+  return pending.promise;
 }
 
 function threadRow(thread) {
@@ -148,27 +181,42 @@ function threadRow(thread) {
   return `<button class="chat-thread" data-chat-friend="${escapeHtml(thread.friend_id)}" data-chat-name="${escapeHtml(thread.username)}"><span class="chat-avatar">${initial}</span><span class="chat-thread-main"><span class="chat-thread-top"><b>${escapeHtml(thread.username)}</b><time>${formatThreadTime(thread.last_at)}</time></span><span class="chat-thread-bottom"><span>${preview}</span>${unread ? `<strong class="chat-unread">${unread > 99 ? "99+" : unread}</strong>` : ""}</span></span></button>`;
 }
 
+function conversationSignature(thread) {
+  return thread
+    ? `${thread.friend_id}:${thread.last_at}:${thread.last_message || ""}`
+    : "";
+}
+
 async function openChat(friend = null) {
   ensureShell();
   const layer = document.querySelector("#chat-layer");
   layer.hidden = false;
   document.body.classList.add("chat-active");
-  if (friend) openedFriend = friend;
+  if (friend) {
+    if (friend.id !== openedFriend?.id)
+      lastConversationSignature = conversationSignature(
+        cachedThreads.find((thread) => thread.friend_id === friend.id),
+      );
+    openedFriend = friend;
+  }
+  scheduleBadgeRefresh();
   openedFriend ? await renderConversation() : await renderThreads();
 }
 function closeChat() {
   openedFriend = null;
+  lastConversationSignature = "";
   editingMessage = null;
   closeMessageMenu();
   const layer = document.querySelector("#chat-layer");
   if (layer) layer.hidden = true;
   document.body.classList.remove("chat-active");
+  scheduleBadgeRefresh();
 }
 
 async function renderThreads() {
   const layer = document.querySelector("#chat-layer");
   if (!layer) return;
-  const threads = await getThreads();
+  const threads = await getThreads({ allowCache: true });
   layer.innerHTML = `<section class="chat-shell chat-list-view"><header class="chat-topbar"><div><span class="chat-kicker">Aurora Call</span><h1>Чаты</h1></div><button class="chat-icon-btn" data-chat-close aria-label="Закрыть">${icon("close")}</button></header><div class="chat-search-wrap"><input class="chat-search" type="search" placeholder="Поиск" aria-label="Поиск по чатам"></div><div class="chat-thread-list">${threads.length ? threads.map(threadRow).join("") : '<div class="chat-empty"><span>💬</span><b>Сообщений пока нет</b><p>Откройте друга и нажмите «Сообщение».</p></div>'}</div></section>`;
   layer.querySelector("[data-chat-close]").onclick = closeChat;
   installChatEdgeSwipe(layer.querySelector(".chat-list-view"), closeChat);
@@ -455,6 +503,8 @@ async function renderConversation() {
   });
   const returnToThreads = () => {
     openedFriend = null;
+    lastConversationSignature = "";
+    scheduleBadgeRefresh();
     return renderThreads();
   };
   layer.querySelector("[data-chat-back]").onclick = () =>
@@ -637,34 +687,72 @@ function showMediaViewer(src) {
 }
 
 async function refreshBadge() {
-  if (!state.session) return;
-  const threads = await getThreads(),
-    total = threads.reduce(
+  if (!state.session || badgeRefreshInFlight) return;
+  badgeRefreshInFlight = true;
+  try {
+    const threads = await getThreads();
+    const total = threads.reduce(
       (sum, thread) => sum + Number(thread.unread_count || 0),
       0,
-    ),
-    badge = document.querySelector(".chat-nav-badge");
-  if (badge) {
-    badge.hidden = !total;
-    badge.textContent = total > 99 ? "99+" : String(total);
-  }
-  const signature = threads
-    .map(
-      (thread) =>
-        `${thread.friend_id}:${thread.last_at}:${thread.unread_count}`,
+    );
+    const badge = document.querySelector(".chat-nav-badge");
+    if (badge) {
+      badge.hidden = !total;
+      badge.textContent = total > 99 ? "99+" : String(total);
+    }
+
+    const activeThread = openedFriend
+      ? threads.find((thread) => thread.friend_id === openedFriend.id)
+      : null;
+    const signature = conversationSignature(activeThread);
+    const layer = document.querySelector("#chat-layer");
+    const conversationVisible = Boolean(
+      openedFriend &&
+      layer &&
+      !layer.hidden &&
+      layer.querySelector(".chat-conversation-view"),
+    );
+    const gestureInProgress = Boolean(
+      layer?.querySelector(".is-edge-back-swiping, .is-edge-back-settling"),
+    );
+    if (
+      lastConversationSignature &&
+      signature !== lastConversationSignature &&
+      conversationVisible &&
+      !gestureInProgress
     )
-    .join("|");
-  if (
-    lastThreadSignature &&
-    signature !== lastThreadSignature &&
-    openedFriend &&
-    !document.querySelector("#chat-layer")?.hidden
-  )
-    await renderConversation();
-  lastThreadSignature = signature;
+      await renderConversation();
+    if (!gestureInProgress) lastConversationSignature = signature;
+  } finally {
+    badgeRefreshInFlight = false;
+  }
+}
+
+function currentChatPollDelay() {
+  const layer = document.querySelector("#chat-layer");
+  return chatPollDelay({
+    hasSession: Boolean(state.session),
+    visible: document.visibilityState !== "hidden",
+    conversationOpen: Boolean(openedFriend && layer && !layer.hidden),
+  });
+}
+
+function scheduleBadgeRefresh(delay = currentChatPollDelay()) {
+  if (!initialized) return;
+  if (pollTimer !== null) window.clearTimeout(pollTimer);
+  pollTimer = window.setTimeout(
+    async () => {
+      pollTimer = null;
+      await refreshBadge();
+      scheduleBadgeRefresh();
+    },
+    Math.max(0, delay),
+  );
 }
 
 export function initChat() {
+  if (initialized) return;
+  initialized = true;
   ensureShell();
   observer = new MutationObserver(ensureShell);
   observer.observe(document.getElementById("root"), {
@@ -675,6 +763,9 @@ export function initChat() {
     "aurora-chat-open",
     (event) => void openChat(event.detail || null),
   );
-  pollTimer = window.setInterval(() => void refreshBadge(), 2200);
-  void refreshBadge();
+  document.addEventListener("visibilitychange", () =>
+    scheduleBadgeRefresh(document.visibilityState === "hidden" ? undefined : 0),
+  );
+  window.addEventListener("online", () => scheduleBadgeRefresh(0));
+  scheduleBadgeRefresh(0);
 }

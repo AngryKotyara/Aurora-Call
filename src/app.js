@@ -3,7 +3,7 @@ import { prepareAvatar, installProfileAvatar } from "./profile-avatar.js";
 import { applyBranding } from "./branding.js";
 import { pickCallContact } from "./call-picker.js";
 import { startCall, startSignalPolling } from "./calls.js";
-import { initChat } from "./chat.js?v=20260830-edge-back2";
+import { initChat } from "./chat.js?v=20260830-perf1";
 import { installIncomingCallAlerting } from "./incoming-call.js";
 import {
   disableMediaAccess,
@@ -24,6 +24,11 @@ applyBranding();
 installIncomingCallAlerting();
 
 let authActionInFlight = false;
+let currentScreen = "home";
+let lastViewRefreshAt = 0;
+let backgroundRefresh = null;
+let renderSequence = 0;
+const VIEW_REFRESH_AFTER_MS = 30_000;
 
 async function runAuthAction(action) {
   if (authActionInFlight) return;
@@ -104,6 +109,10 @@ document.addEventListener("aurora-auth-register", (event) => {
 
 function logout() {
   clearSession();
+  renderSequence += 1;
+  currentScreen = "home";
+  lastViewRefreshAt = 0;
+  backgroundRefresh = null;
   renderAuth({ onRegister: register, onLogin: login });
 }
 function selectFriend(friend) {
@@ -236,17 +245,45 @@ async function beginCall(mode, friend = null) {
   state.selectedFriend = target;
   void startCall(mode);
 }
-async function render(activeScreen = "home") {
+function navigateScreen(screen) {
+  currentScreen = ["home", "history", "friends", "settings"].includes(screen)
+    ? screen
+    : "home";
+  if (
+    Date.now() - lastViewRefreshAt > VIEW_REFRESH_AFTER_MS &&
+    !backgroundRefresh
+  ) {
+    backgroundRefresh = render(currentScreen)
+      .catch((error) => console.warn("Background view refresh failed", error))
+      .finally(() => {
+        backgroundRefresh = null;
+      });
+  }
+}
+
+async function render(activeScreen = currentScreen) {
+  const requestSequence = ++renderSequence;
+  currentScreen = ["home", "history", "friends", "settings"].includes(
+    activeScreen,
+  )
+    ? activeScreen
+    : "home";
   if (!state.session) {
     renderAuth({ onRegister: register, onLogin: login });
     return;
   }
+  const sessionToken = state.session.token;
   const [friends, callHistory, mediaPermission, profile] = await Promise.all([
-    rpc("list_call_friends", { p_token: state.session.token }).catch(() => []),
-    rpc("list_call_history", { p_token: state.session.token }).catch(() => []),
+    rpc("list_call_friends", { p_token: sessionToken }).catch(() => []),
+    rpc("list_call_history", { p_token: sessionToken }).catch(() => []),
     inspectMediaPermissions(state.session).catch(() => ({ status: "prompt" })),
-    rpc("get_call_profile", { p_token: state.session.token }).catch(() => null),
+    rpc("get_call_profile", { p_token: sessionToken }).catch(() => null),
   ]);
+  if (
+    requestSequence !== renderSequence ||
+    state.session?.token !== sessionToken
+  )
+    return;
   if (profile?.username) {
     saveSession({
       ...state.session,
@@ -257,18 +294,19 @@ async function render(activeScreen = "home") {
   }
   state.friends = Array.isArray(friends) ? friends : [];
   state.callHistory = Array.isArray(callHistory) ? callHistory : [];
+  lastViewRefreshAt = Date.now();
   renderMain({
-    activeScreen,
+    activeScreen: currentScreen,
     session: state.session,
     friends: state.friends,
     callHistory: state.callHistory,
     mediaPermission: mediaPermission || { status: "prompt" },
-    onNavigate: render,
+    onNavigate: navigateScreen,
     onSelectFriend: selectFriend,
     onCall: (mode, friend) => void beginCall(mode, friend || null),
     onGenerateInvite: generateInvite,
     onDeleteFriend: deleteFriend,
-    onRequestMediaAccess: () => toggleMediaAccess(activeScreen),
+    onRequestMediaAccess: () => toggleMediaAccess(currentScreen),
     onLogout: logout,
   });
   installProfileAvatar({

@@ -197,19 +197,37 @@ export function renderMain({
     historyItems =
       callHistory.map(historyListItem).join("") ||
       '<div class="card empty-state"><span aria-hidden="true">◷</span><b>История пока пуста</b><p class="muted">Здесь появятся входящие и исходящие звонки.</p></div>';
-  root.innerHTML = `<main class="app"><section class="screen ${activeScreen === "home" ? "on" : ""}"><header class="home-hero"><div class="home-copy">${brandLockup("hero-brand")}<h1>Звонки</h1><p>Выберите друга и начните разговор.</p></div>${auroraWaves()}</header>${mediaPermission?.status === "granted" ? "" : mediaAccessCard(mediaPermission, true)}<div class="grid"><button id="audio" class="call">☎<br />Аудиозвонок</button><button id="video" class="call video">▣<br />Видеозвонок</button></div><h2>Друзья</h2>${callFriends}</section><section class="screen ${activeScreen === "history" ? "on" : ""}"><div class="section-heading"><div><span class="eyebrow">Последние события</span><h1>История звонков</h1></div><span class="history-count" aria-label="Звонков в истории: ${callHistory.length}">${callHistory.length}</span></div>${historyItems}</section><section class="screen ${activeScreen === "friends" ? "on" : ""}"><h1>Друзья</h1>${allFriends}</section><section class="screen ${activeScreen === "settings" ? "on" : ""}"><h1>Настройки</h1><div class="card"><span class="muted">Имя пользователя</span><h2>${escapeHtml(session.username)}</h2></div>${mediaAccessCard(mediaPermission)}<div class="card"><h2>QR-приглашение</h2><p class="muted">Одноразовое приглашение.</p><button id="generate-invite" class="btn">Создать QR</button><div id="invite"></div></div><button id="logout" class="btn ghost">Выйти</button></section>${navigation(activeScreen)}</main>`;
+  root.innerHTML = `<main class="app" data-active-screen="${activeScreen}"><section class="screen ${activeScreen === "home" ? "on" : ""}" data-screen="home"><header class="home-hero"><div class="home-copy">${brandLockup("hero-brand")}<h1>Звонки</h1><p>Выберите друга и начните разговор.</p></div>${auroraWaves()}</header>${mediaPermission?.status === "granted" ? "" : mediaAccessCard(mediaPermission, true)}<div class="grid"><button id="audio" class="call">☎<br />Аудиозвонок</button><button id="video" class="call video">▣<br />Видеозвонок</button></div><h2>Друзья</h2>${callFriends}</section><section class="screen ${activeScreen === "history" ? "on" : ""}" data-screen="history"><div class="section-heading"><div><span class="eyebrow">Последние события</span><h1>История звонков</h1></div><span class="history-count" aria-label="Звонков в истории: ${callHistory.length}">${callHistory.length}</span></div>${historyItems}</section><section class="screen ${activeScreen === "friends" ? "on" : ""}" data-screen="friends"><h1>Друзья</h1>${allFriends}</section><section class="screen ${activeScreen === "settings" ? "on" : ""}" data-screen="settings"><h1>Настройки</h1><div class="card"><span class="muted">Имя пользователя</span><h2>${escapeHtml(session.username)}</h2></div>${mediaAccessCard(mediaPermission)}<div class="card"><h2>QR-приглашение</h2><p class="muted">Одноразовое приглашение.</p><button id="generate-invite" class="btn">Создать QR</button><div id="invite"></div></div><button id="logout" class="btn ghost">Выйти</button></section>${navigation(activeScreen)}</main>`;
   mountXperiaFlow(root);
-  if (activeScreen !== "home") {
-    const app = root.querySelector(".app");
-    installEdgeSwipeBack(app, () => onNavigate("home"), {
-      visualTarget: app?.querySelector(".screen.on"),
-      host: app,
-    });
-  }
+  const app = root.querySelector(".app");
+  const availableScreens = new Set(["home", "history", "friends", "settings"]);
+  const activateScreen = (requestedScreen) => {
+    const nextScreen = availableScreens.has(requestedScreen)
+      ? requestedScreen
+      : "home";
+    app.dataset.activeScreen = nextScreen;
+    app
+      .querySelectorAll("[data-screen]")
+      .forEach((screen) =>
+        screen.classList.toggle("on", screen.dataset.screen === nextScreen),
+      );
+    app
+      .querySelectorAll("[data-nav]")
+      .forEach((button) =>
+        button.classList.toggle("on", button.dataset.nav === nextScreen),
+      );
+    window.scrollTo?.(0, 0);
+    onNavigate(nextScreen);
+  };
+  installEdgeSwipeBack(app, () => activateScreen("home"), {
+    getVisualTarget: () => app.querySelector(".screen.on"),
+    host: app,
+    canStart: () => app.dataset.activeScreen !== "home",
+  });
   document
     .querySelectorAll("[data-nav]")
     .forEach((b) =>
-      b.addEventListener("click", () => onNavigate(b.dataset.nav)),
+      b.addEventListener("click", () => activateScreen(b.dataset.nav)),
     );
   document
     .querySelectorAll("[data-select]")

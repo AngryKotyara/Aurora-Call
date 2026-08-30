@@ -8,6 +8,7 @@ import {
 } from "./ios-screen-share.js";
 import { dismissIncomingCall, showIncomingCall } from "./incoming-call.js";
 import { clearMediaPermissionRecord } from "./media-permissions.js";
+import { signalPollDelay } from "./polling-policy.js";
 import { state } from "./state.js";
 import {
   removeCallModal,
@@ -21,6 +22,7 @@ import { query, showToast } from "./utils.js";
 let removeScreenEndedListener = () => {};
 let signalPollInFlight = false;
 let signalPollTimer = null;
+let signalPollingStarted = false;
 const pendingSignals = new Map();
 const MAX_PENDING_CALLS = 20;
 const MAX_SIGNALS_PER_CALL = 100;
@@ -215,6 +217,7 @@ function closePeer() {
   if (closingCallId) pendingSignals.delete(closingCallId);
   setRemoteScreenShareActive(false);
   removeCallModal();
+  scheduleSignalPoll();
 }
 
 async function sendSignal(kind, payload) {
@@ -271,6 +274,7 @@ async function callFriend(mode) {
       p_mode: mode,
     });
     state.callId = callId;
+    scheduleSignalPoll(0);
     const screenShare = getScreenShareSupport();
     renderCallModal({
       friendName: friend.name,
@@ -297,6 +301,7 @@ async function callFriend(mode) {
 async function acceptIncoming(call) {
   if (!state.session) return;
   state.callId = call.id;
+  scheduleSignalPoll(0);
   state.selectedFriend = { id: call.from_id, name: call.from_name };
   try {
     await prepareLocalMedia(call.mode);
@@ -440,11 +445,37 @@ export async function pollSignalsOnce() {
   }
 }
 
-export function startSignalPolling() {
-  if (signalPollTimer) return;
-  void pollSignalsOnce();
-  signalPollTimer = window.setInterval(
-    () => void pollSignalsOnce(),
-    config.signalPollIntervalMs,
+function currentSignalPollDelay() {
+  return signalPollDelay({
+    hasSession: Boolean(state.session),
+    visible: document.visibilityState !== "hidden",
+    activeCall: Boolean(state.callId || state.peer),
+    online: navigator.onLine !== false,
+    baseInterval: config.signalPollIntervalMs,
+  });
+}
+
+function scheduleSignalPoll(delay) {
+  if (!signalPollingStarted) return;
+  const nextDelay = delay ?? currentSignalPollDelay();
+  if (signalPollTimer !== null) window.clearTimeout(signalPollTimer);
+  signalPollTimer = window.setTimeout(
+    async () => {
+      signalPollTimer = null;
+      await pollSignalsOnce();
+      scheduleSignalPoll();
+    },
+    Math.max(0, nextDelay),
   );
+}
+
+export function startSignalPolling() {
+  if (signalPollingStarted) return;
+  signalPollingStarted = true;
+  document.addEventListener("visibilitychange", () =>
+    scheduleSignalPoll(document.visibilityState === "hidden" ? undefined : 0),
+  );
+  window.addEventListener("online", () => scheduleSignalPoll(0));
+  window.addEventListener("offline", () => scheduleSignalPoll());
+  scheduleSignalPoll(0);
 }

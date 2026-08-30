@@ -44,6 +44,8 @@ button {
     max(18px, env(safe-area-inset-right))
     calc(100px + env(safe-area-inset-bottom))
     max(18px, env(safe-area-inset-left));
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
 }
 .home-hero {
   position: relative;
@@ -508,13 +510,13 @@ h2 {
   z-index: 1;
   transform: translate3d(var(--edge-back-x, 0px), 0, 0);
   will-change: transform;
-  box-shadow: -18px 0 42px rgba(0, 0, 0, 0.34);
+  backface-visibility: hidden;
 }
 .is-edge-back-swiping {
   transition: none;
 }
 .is-edge-back-settling {
-  transition: transform 180ms cubic-bezier(0.22, 0.78, 0.24, 1);
+  transition: transform 210ms cubic-bezier(0.2, 0.82, 0.25, 1);
   pointer-events: none;
 }
 .edge-back-gesture-active::before {
@@ -542,6 +544,11 @@ h2 {
   .is-edge-back-settling {
     transition-duration: 1ms;
   }
+}
+html.app-backgrounded *,
+html.app-backgrounded *::before,
+html.app-backgrounded *::after {
+  animation-play-state: paused !important;
 }
 .toast {
   position: fixed;
