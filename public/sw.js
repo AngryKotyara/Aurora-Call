@@ -1,4 +1,4 @@
-const CACHE = "aurora-shell-v8";
+const CACHE = "aurora-shell-v9";
 const SHELL = [
   "/",
   "/index.html",
@@ -87,6 +87,19 @@ self.addEventListener("push", (event) => {
   }
   const notification = payload.notification || payload;
   const notificationData = notification.data || payload;
+
+  if (notificationData.type === "call_end") {
+    const callId = notificationData.call_id;
+    event.waitUntil(
+      self.registration
+        .getNotifications(callId ? { tag: `call-${callId}` } : undefined)
+        .then((notifications) => {
+          notifications.forEach((item) => item.close());
+        }),
+    );
+    return;
+  }
+
   const title = notification.title || "Aurora Call";
   const options = {
     body: notification.body || "Новое событие",
