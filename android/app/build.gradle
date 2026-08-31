@@ -2,10 +2,6 @@ plugins {
     id 'com.android.application'
 }
 
-if (file('google-services.json').exists()) {
-    apply plugin: 'com.google.gms.google-services'
-}
-
 def generatedAuroraIconResDir = file("$buildDir/generated/aurora-icon-res")
 def signingAvailable = [
         System.getenv('AURORA_KEYSTORE_PATH'),
@@ -22,8 +18,8 @@ android {
         applicationId 'app.auroracall'
         minSdk 26
         targetSdk 36
-        versionCode 2
-        versionName '1.1.0'
+        versionCode 3
+        versionName '1.2.0'
     }
 
     sourceSets {
@@ -72,8 +68,17 @@ tasks.matching { it.name == 'preBuild' }.configureEach {
     dependsOn tasks.named('generateAuroraIcon')
 }
 
+configurations.configureEach {
+    def tink = 'com.google.crypto.tink:tink-android:1.20.0'
+    resolutionStrategy {
+        force tink
+        dependencySubstitution {
+            substitute module('com.google.crypto.tink:tink') using module(tink)
+        }
+    }
+}
+
 dependencies {
     implementation 'androidx.webkit:webkit:1.17.0'
-    implementation platform('com.google.firebase:firebase-bom:34.18.0')
-    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'org.unifiedpush.android:connector:3.3.5'
 }
