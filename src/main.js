@@ -22,6 +22,7 @@ import { initChatPresence } from "./chat-presence.js?v=20260831-presence1";
 import "./interaction-polish.js";
 import "./permission-check-animation.js?v=20260815-permissions2";
 import { initPushNotifications } from "./push-notifications.js?v=20260831-android1";
+import "./logout-push-bridge.js";
 
 function syncPageActivity() {
   document.documentElement.classList.toggle(
