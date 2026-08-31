@@ -16,6 +16,16 @@ test("push backend emits declarative notifications with unread badges", () => {
   assert.match(backend, /86_400/);
 });
 
+test("native Android push uses UnifiedPush without Firebase fallback", () => {
+  const backend = source("supabase/functions/aurora-push/index.ts");
+  const pushClient = source("src/push-notifications.js");
+
+  assert.match(backend, /"X-UnifiedPush":\s*"1"/);
+  assert.match(pushClient, /distributor_available/);
+  assert.match(pushClient, /mode:\s*"unifiedpush_help"/);
+  assert.doesNotMatch(pushClient, /Firebase Cloud Messaging/);
+});
+
 test("call notification launches are routed to the call controller", () => {
   const pushClient = source("src/push-notifications.js");
   const calls = source("src/calls.js");
