@@ -100,7 +100,8 @@ Deno.serve(async (req: Request) => {
     if (!/^[a-z0-9.-]+$/.test(host) || secret.length < 32)
       return respond(req, { error: "turn_not_configured" }, 503);
 
-    const expiresUnix = Math.floor(Date.now() / 1000) + CREDENTIAL_TTL_SECONDS;
+    const expiresUnix =
+      Math.floor(Date.now() / 1000) + CREDENTIAL_TTL_SECONDS;
     const username = `${expiresUnix}:${userId}`;
     const credential = await hmacSha1Base64(secret, username);
 
