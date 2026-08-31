@@ -1,0 +1,102 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      AURORA_SUPABASE_URL: ${AURORA_SUPABASE_URL:-https://taqpirplpmjihmkztwlv.supabase.co}
+      AURORA_SUPABASE_PUBLISHABLE_KEY: ${AURORA_SUPABASE_PUBLISHABLE_KEY:-sb_publishable_ciRXzMnLGCYUm-u-esWIOA_v6XjUEuu}
+    expose:
+      - "8080"
+    networks:
+      - aurora
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  ntfy:
+    image: binwiederhier/ntfy:v2.28.0
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: https://${PUSH_DOMAIN:-push.auroracall.net}
+      NTFY_LISTEN_HTTP: :80
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_ENABLE_LOGIN: "true"
+      NTFY_KEEPALIVE_INTERVAL: 2m
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+    expose:
+      - "80"
+    networks:
+      - aurora
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+      ntfy:
+        condition: service_started
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-auroracall.net}
+      PUSH_DOMAIN: ${PUSH_DOMAIN:-push.auroracall.net}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - aurora
+
+  coturn:
+    image: coturn/coturn:4.17.2-r0
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --log-file=stdout
+      - --fingerprint
+      - --realm=${TURN_DOMAIN:-turn.auroracall.net}
+      - --server-name=${TURN_DOMAIN:-turn.auroracall.net}
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SHARED_SECRET}
+      - --listening-port=3478
+      - --tls-listening-port=5349
+      - --relay-ip=${TURN_RELAY_IP}
+      - --external-ip=${TURN_EXTERNAL_IP}
+      - --min-port=49160
+      - --max-port=49260
+      - --cert=/certs/fullchain.pem
+      - --pkey=/certs/privkey.pem
+      - --no-cli
+      - --no-loopback-peers
+      - --no-multicast-peers
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+    volumes:
+      - ${TURN_CERT_DIR}:/certs:ro
+
+networks:
+  aurora:
+
+volumes:
+  ntfy_data:
+  caddy_data:
+  caddy_config:
