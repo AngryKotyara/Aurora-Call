@@ -1,0 +1,29 @@
+.chat-peer-status {
+  min-height: 16px;
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.2;
+}
+
+.chat-online-dot {
+  display: none;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #39d874;
+  box-shadow: 0 0 0 3px rgba(57, 216, 116, 0.13);
+}
+
+.chat-peer-status.is-online .chat-online-dot {
+  display: inline-block;
+}
+
+.chat-peer-status.is-online .chat-peer-status-text {
+  color: #69df91;
+}
+
+.chat-peer-status.is-active .chat-peer-status-text {
+  color: #78e59c;
+}
