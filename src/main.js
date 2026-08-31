@@ -17,6 +17,8 @@ import "./photo-viewer-ux.js?v=20260830-photo3";
 import "./chat-polish.js?v=20260829-chat3";
 import "./chat-call-priority.js?v=20260829-chat4";
 import "./chat-delete-resilience.js";
+import "./chat-presence.css";
+import { initChatPresence } from "./chat-presence.js?v=20260831-presence1";
 import "./interaction-polish.js";
 import "./permission-check-animation.js?v=20260815-permissions2";
 import { initPushNotifications } from "./push-notifications.js?v=20260830-perf1";
@@ -30,6 +32,7 @@ function syncPageActivity() {
 
 document.addEventListener("visibilitychange", syncPageActivity);
 syncPageActivity();
+initChatPresence();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", async () => {
