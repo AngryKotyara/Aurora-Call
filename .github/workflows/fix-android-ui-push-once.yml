@@ -140,12 +140,12 @@ jobs:
           s = s[:pos] + '          { TTL: ttl, headers: { "X-UnifiedPush": "1" } },' + s[pos + len(old):]
           backend.write_text(s)
           PY
-      - run: npx prettier --write src/push-notifications.js supabase/functions/aurora-push/index.ts .github/workflows/fix-android-ui-push-once.yml
+      - run: npx prettier --write src/push-notifications.js supabase/functions/aurora-push/index.ts
       - name: Commit fixes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add android/app/src/main/java/app/auroracall/MainActivity.java src/push-notifications.js supabase/functions/aurora-push/index.ts .github/workflows/fix-android-ui-push-once.yml
+          git add android/app/src/main/java/app/auroracall/MainActivity.java src/push-notifications.js supabase/functions/aurora-push/index.ts
           if git diff --cached --quiet; then
             exit 0
           fi
