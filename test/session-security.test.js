@@ -34,3 +34,13 @@ test("same-origin RPC proxy injects the cookie token and blocks legacy login", (
   assert.match(proxy, /"login_call_user"/);
   assert.match(proxy, /sameOriginRequest\(req\)/);
 });
+
+test("an expired HttpOnly session returns to login instead of empty data", () => {
+  const api = source("src/api.js");
+  const app = source("src/app.js");
+
+  assert.match(api, /response\.status === 401/);
+  assert.match(api, /aurora-session-expired/);
+  assert.match(app, /addEventListener\("aurora-session-expired"/);
+  assert.match(app, /Сессия истекла\. Войдите снова/);
+});

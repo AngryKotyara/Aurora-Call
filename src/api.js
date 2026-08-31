@@ -10,6 +10,11 @@ function getErrorMessage(responseBody) {
   }
 }
 
+function announceExpiredSession() {
+  if (typeof document === "undefined") return;
+  document.dispatchEvent(new CustomEvent("aurora-session-expired"));
+}
+
 async function sendPushEvent(action, body) {
   try {
     await resilientFetch(
@@ -64,7 +69,12 @@ export async function rpc(functionName, body, policy = {}) {
   );
 
   const responseBody = await response.text();
-  if (!response.ok) throw new Error(getErrorMessage(responseBody));
+  if (!response.ok) {
+    const message = getErrorMessage(responseBody);
+    if (response.status === 401 || message === "invalid_session")
+      announceExpiredSession();
+    throw new Error(message);
+  }
   const result = responseBody ? JSON.parse(responseBody) : null;
   dispatchPushForRpc(functionName, body, result);
   return result;

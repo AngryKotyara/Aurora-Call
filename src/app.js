@@ -28,7 +28,22 @@ let currentScreen = "home";
 let lastViewRefreshAt = 0;
 let backgroundRefresh = null;
 let renderSequence = 0;
+let expiredSessionHandled = false;
 const VIEW_REFRESH_AFTER_MS = 30_000;
+
+function showExpiredSessionLogin() {
+  if (expiredSessionHandled || !state.session) return;
+  expiredSessionHandled = true;
+  renderSequence += 1;
+  currentScreen = "home";
+  lastViewRefreshAt = 0;
+  backgroundRefresh = null;
+  clearSession();
+  renderAuth({ onRegister: register, onLogin: login });
+  showToast("Сессия истекла. Войдите снова");
+}
+
+document.addEventListener("aurora-session-expired", showExpiredSessionLogin);
 
 async function runAuthAction(action) {
   if (authActionInFlight) return;
@@ -81,6 +96,7 @@ async function login(username, accessKey) {
   try {
     const session = await loginByAccessKey(username, accessKey);
     saveSession(session);
+    expiredSessionHandled = false;
     await render();
     await acceptInviteFromUrl();
   } catch {
