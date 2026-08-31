@@ -18,6 +18,7 @@ public final class AuroraPushService extends PushService {
         PublicKeySet keys = endpoint == null ? null : endpoint.getPubKeySet();
         if (endpoint == null || keys == null) {
             NativePushState.clearEndpoint(this);
+            NativePushState.setRegistrationError(this, "invalid_endpoint");
         } else {
             NativePushState.saveEndpoint(
                     this,
@@ -26,6 +27,7 @@ public final class AuroraPushService extends PushService {
                     keys.getAuth(),
                     endpoint.getTemporary()
             );
+            NativePushState.setRegistrationError(this, null);
         }
         MainActivity.notifyNativePushStateChanged();
     }
@@ -63,17 +65,23 @@ public final class AuroraPushService extends PushService {
     @Override
     public void onRegistrationFailed(FailedReason reason, String instance) {
         NativePushState.clearEndpoint(this);
+        NativePushState.setRegistrationError(
+                this,
+                reason == null ? "registration_failed" : reason.name().toLowerCase()
+        );
         MainActivity.notifyNativePushStateChanged();
     }
 
     @Override
     public void onUnregistered(String instance) {
         NativePushState.clearEndpoint(this);
+        NativePushState.setRegistrationError(this, "unregistered");
         MainActivity.notifyNativePushStateChanged();
     }
 
     @Override
     public void onTempUnavailable(String instance) {
+        NativePushState.setRegistrationError(this, "temporary_unavailable");
         MainActivity.notifyNativePushStateChanged();
     }
 }
