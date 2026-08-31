@@ -41,7 +41,9 @@ type AuroraSession = {
   expiresAt: string;
 };
 
-async function currentSession(token: string | null): Promise<AuroraSession | null> {
+async function currentSession(
+  token: string | null,
+): Promise<AuroraSession | null> {
   if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return null;
   const { data } = await db
     .from("call_sessions")
@@ -108,10 +110,7 @@ async function firebaseServiceAccount(): Promise<FirebaseServiceAccount | null> 
 function base64UrlBytes(bytes: Uint8Array) {
   let binary = "";
   for (const value of bytes) binary += String.fromCharCode(value);
-  return btoa(binary)
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
 function base64UrlText(value: string) {

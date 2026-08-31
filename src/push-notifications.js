@@ -206,9 +206,10 @@ async function disableNotifications() {
   if (isAndroidNativeApp()) {
     const token = nativePushState?.token;
     if (token && state.session?.token) {
-      await pushApi({ action: "unsubscribe_native", device_token: token }).catch(
-        () => {},
-      );
+      await pushApi({
+        action: "unsubscribe_native",
+        device_token: token,
+      }).catch(() => {});
     }
     lastNativeFingerprint = "";
     lastNativeSyncAt = 0;
