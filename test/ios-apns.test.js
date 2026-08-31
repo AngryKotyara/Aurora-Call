@@ -12,7 +12,7 @@ const proxySource = await readFile(
   "utf8",
 );
 
- test("iOS incoming calls use a dedicated APNs VoIP path", () => {
+test("iOS incoming calls use a dedicated APNs VoIP path", () => {
   assert.match(apnsSource, /"apns-push-type": "voip"/);
   assert.match(apnsSource, /"apns-priority": "10"/);
   assert.match(apnsSource, /"apns-expiration": "0"/);
