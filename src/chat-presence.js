@@ -166,23 +166,45 @@ function timeText(date) {
   }).format(date);
 }
 
+function russianCountForm(value, one, few, many) {
+  const absolute = Math.abs(value) % 100;
+  const lastDigit = absolute % 10;
+  if (absolute > 10 && absolute < 20) return many;
+  if (lastDigit === 1) return one;
+  if (lastDigit >= 2 && lastDigit <= 4) return few;
+  return many;
+}
+
 export function formatLastSeen(value, nowValue = new Date()) {
-  if (!value) return "не в сети";
+  if (!value) return "был(а) давно";
   const date = new Date(value);
   const now = new Date(nowValue);
   if (!Number.isFinite(date.getTime()) || !Number.isFinite(now.getTime()))
-    return "не в сети";
+    return "был(а) давно";
 
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const seenDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const elapsedMs = Math.max(0, now.getTime() - date.getTime());
+  const elapsedSeconds = Math.floor(elapsedMs / 1_000);
+  if (elapsedSeconds < 60) return "был(а) только что";
+
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60) {
+    const unit = russianCountForm(minutes, "минуту", "минуты", "минут");
+    return `был(а) ${minutes} ${unit} назад`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const unit = russianCountForm(hours, "час", "часа", "часов");
+    return `был(а) ${hours} ${unit} назад`;
+  }
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) {
+    const unit = russianCountForm(days, "день", "дня", "дней");
+    return `был(а) ${days} ${unit} назад`;
+  }
+
   const time = timeText(date);
-
-  if (seenDay.getTime() === today.getTime()) return `был(а) сегодня в ${time}`;
-  if (seenDay.getTime() === yesterday.getTime())
-    return `был(а) вчера в ${time}`;
-
   const dateText = new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
     month: "2-digit",
