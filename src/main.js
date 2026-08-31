@@ -22,6 +22,7 @@ import { initChatPresence } from "./chat-presence.js?v=20260831-presence1";
 import "./interaction-polish.js";
 import "./permission-check-animation.js?v=20260815-permissions2";
 import { initPushNotifications } from "./push-notifications.js?v=20260831-android1";
+import { initTurnCredentials } from "./turn-credentials.js?v=20260831-turn1";
 import "./logout-push-bridge.js";
 
 function syncPageActivity() {
@@ -35,6 +36,7 @@ document.addEventListener("visibilitychange", syncPageActivity);
 syncPageActivity();
 initChatPresence();
 initPushNotifications();
+initTurnCredentials();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", async () => {
