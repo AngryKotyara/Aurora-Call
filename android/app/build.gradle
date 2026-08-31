@@ -2,7 +2,17 @@ plugins {
     id 'com.android.application'
 }
 
+if (file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
+}
+
 def generatedAuroraIconResDir = file("$buildDir/generated/aurora-icon-res")
+def signingAvailable = [
+        System.getenv('AURORA_KEYSTORE_PATH'),
+        System.getenv('AURORA_KEYSTORE_PASSWORD'),
+        System.getenv('AURORA_KEY_ALIAS'),
+        System.getenv('AURORA_KEY_PASSWORD')
+].every { it != null && !it.isBlank() }
 
 android {
     namespace 'app.auroracall'
@@ -12,13 +22,24 @@ android {
         applicationId 'app.auroracall'
         minSdk 26
         targetSdk 36
-        versionCode 1
-        versionName '1.0.0'
+        versionCode 2
+        versionName '1.1.0'
     }
 
     sourceSets {
         main {
             res.srcDir generatedAuroraIconResDir
+        }
+    }
+
+    signingConfigs {
+        if (signingAvailable) {
+            release {
+                storeFile file(System.getenv('AURORA_KEYSTORE_PATH'))
+                storePassword System.getenv('AURORA_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('AURORA_KEY_ALIAS')
+                keyPassword System.getenv('AURORA_KEY_PASSWORD')
+            }
         }
     }
 
@@ -31,6 +52,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (signingAvailable) signingConfig signingConfigs.release
         }
     }
 
@@ -52,4 +74,6 @@ tasks.matching { it.name == 'preBuild' }.configureEach {
 
 dependencies {
     implementation 'androidx.webkit:webkit:1.17.0'
+    implementation platform('com.google.firebase:firebase-bom:34.18.0')
+    implementation 'com.google.firebase:firebase-messaging'
 }
