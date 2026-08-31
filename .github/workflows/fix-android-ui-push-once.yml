@@ -116,27 +116,18 @@ jobs:
           )
           if count != 1:
               raise SystemExit('nativeCardCopy patch failed')
-          needle = '''    if (copy.mode === "ios_install") {
-              showToast(
-                "Safari → Поделиться → На экран «Домой», затем откройте Aurora Call с иконки",
-              );
-              return;
-            }
-          '''
-          insert = '''    if (copy.mode === "unifiedpush_help") {
-              location.href = "https://unifiedpush.org/users/distributors/ntfy/";
-              return;
-            }
-            if (copy.mode === "ios_install") {
-              showToast(
-                "Safari → Поделиться → На экран «Домой», затем откройте Aurora Call с иконки",
-              );
-              return;
-            }
-          '''
+          needle = '    if (copy.mode === "ios_install") {'
           if needle not in s:
               raise SystemExit('push click patch failed')
-          s = s.replace(needle, insert, 1)
+          s = s.replace(
+              needle,
+              '    if (copy.mode === "unifiedpush_help") {\n'
+              '      location.href = "https://unifiedpush.org/users/distributors/ntfy/";\n'
+              '      return;\n'
+              '    }\n'
+              + needle,
+              1,
+          )
           client.write_text(s)
 
           backend = Path('supabase/functions/aurora-push/index.ts')
