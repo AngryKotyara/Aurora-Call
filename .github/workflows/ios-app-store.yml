@@ -17,7 +17,7 @@ jobs:
       APP_BUNDLE_ID: app.auroracall
       BROADCAST_BUNDLE_ID: app.auroracall.broadcast
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode 26.6
         run: |
