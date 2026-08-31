@@ -103,7 +103,9 @@ Deno.serve(async (req: Request) => {
       .throwOnError();
 
     const values = await configValues(["turn_host", "turn_shared_secret"]);
-    const host = String(values.turn_host || "").trim().toLowerCase();
+    const host = String(values.turn_host || "")
+      .trim()
+      .toLowerCase();
     const secret = String(values.turn_shared_secret || "");
     if (!/^[a-z0-9.-]+$/.test(host) || secret.length < 32) {
       return respond(req, { error: "turn_not_configured" }, 503);
