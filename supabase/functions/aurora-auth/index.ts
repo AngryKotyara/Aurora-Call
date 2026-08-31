@@ -13,7 +13,9 @@ function json(body: unknown, status = 200) {
 }
 
 function normalizeUsername(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 async function sha256(value: string) {

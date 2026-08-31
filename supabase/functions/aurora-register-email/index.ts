@@ -30,11 +30,15 @@ function json(req: Request, body: unknown, status = 200) {
 }
 
 function normalizeUsername(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function normalizeEmail(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function validUsername(value: string) {
@@ -85,8 +89,7 @@ Deno.serve(async (req: Request) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const fromEmail =
-    Deno.env.get("AURORA_FROM_EMAIL") ||
-    "Aurora Call <noreply@auroracall.net>";
+    Deno.env.get("AURORA_FROM_EMAIL") || "Aurora Call <noreply@auroracall.net>";
   if (!resendKey) return json(req, { error: "mail_not_configured" }, 503);
 
   let payload: Record<string, unknown>;
