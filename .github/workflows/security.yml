@@ -19,3 +19,17 @@ jobs:
       - run: npm run format:check
       - run: npm audit --audit-level=high
       - run: npm run build
+      - name: Build self-hosted Docker image
+        run: docker build -t aurora-call:test .
+      - name: Verify self-hosted health endpoint
+        run: |
+          docker run -d --name aurora-call-test -p 127.0.0.1:18080:8080 aurora-call:test
+          trap 'docker rm -f aurora-call-test >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs aurora-call-test
+          exit 1
