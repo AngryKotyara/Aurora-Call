@@ -415,18 +415,6 @@ public final class MainActivity extends Activity implements ScreenShareService.L
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        if (webView != null) webView.onResume();
-    }
-
-    @Override
-    protected void onPause() {
-        if (webView != null) webView.onPause();
-        super.onPause();
-    }
-
-    @Override
     protected void onDestroy() {
         ScreenShareService.setListener(null);
         if (pendingFileCallback != null) pendingFileCallback.onReceiveValue(null);
