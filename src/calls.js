@@ -1,6 +1,10 @@
 import { rpc } from "./api.js";
 import { config } from "./config.js";
 import {
+  notifyAndroidCallActive,
+  notifyAndroidCallEnded,
+} from "./android-native.js";
+import {
   createIOSScreenStream,
   isIOSNativeScreenShareAvailable,
   isIOSScreenStream,
@@ -216,7 +220,10 @@ function closePeer() {
   state.mediaStream = null;
   void stopScreenShare({ restoreCamera: false, notifyPeer: false });
   state.callId = null;
-  if (closingCallId) pendingSignals.delete(closingCallId);
+  if (closingCallId) {
+    pendingSignals.delete(closingCallId);
+    notifyAndroidCallEnded(closingCallId);
+  }
   setRemoteScreenShareActive(false);
   removeCallModal();
   scheduleSignalPoll();
@@ -297,6 +304,7 @@ async function callFriend(mode) {
       onScreenShareUnavailable: () => showToast(screenShare.reason),
       onHangup: () => void hangupCall(),
     });
+    notifyAndroidCallActive({ callId, peerName: friend.name, mode });
     attachStreams();
     const peer = createPeer();
     const offer = await peer.createOffer();
@@ -326,6 +334,11 @@ async function acceptIncoming(call) {
       screenShareUnavailableReason: screenShare.reason,
       onScreenShareUnavailable: () => showToast(screenShare.reason),
       onHangup: () => void hangupCall(),
+    });
+    notifyAndroidCallActive({
+      callId: call.id,
+      peerName: call.from_name,
+      mode: call.mode,
     });
     attachStreams();
     createPeer();
@@ -369,11 +382,12 @@ function clearCallPushUrl(callId) {
   if (callId && params.get("call_id") !== String(callId)) return;
   params.delete("push");
   params.delete("call_id");
+  params.delete("native_action");
   const next = `${location.pathname}${params.toString() ? `?${params}` : ""}${location.hash}`;
   history.replaceState(null, "", next);
 }
 
-export async function openIncomingCallFromPush(callId) {
+export async function openIncomingCallFromPush(callId, nativeAction = "") {
   const normalizedId = String(callId || "");
   if (!state.session || !normalizedId) return false;
   if (pushedCallInFlight === normalizedId) return false;
@@ -389,7 +403,8 @@ export async function openIncomingCallFromPush(callId) {
       showToast("Звонок уже завершён");
       return false;
     }
-    void presentIncomingCall(call);
+    if (nativeAction === "accept") await acceptIncoming(call);
+    else void presentIncomingCall(call);
     scheduleSignalPoll(0);
     return true;
   } catch (error) {
@@ -527,12 +542,19 @@ export function startSignalPolling() {
     callPushListenerInstalled = true;
     document.addEventListener(
       "aurora-call-open",
-      (event) => void openIncomingCallFromPush(event.detail?.callId),
+      (event) =>
+        void openIncomingCallFromPush(
+          event.detail?.callId,
+          event.detail?.nativeAction || "",
+        ),
     );
   }
   const launchParams = new URLSearchParams(location.search);
   if (launchParams.get("push") === "call")
-    void openIncomingCallFromPush(launchParams.get("call_id"));
+    void openIncomingCallFromPush(
+      launchParams.get("call_id"),
+      launchParams.get("native_action") || "",
+    );
   document.addEventListener("visibilitychange", () =>
     scheduleSignalPoll(document.visibilityState === "hidden" ? undefined : 0),
   );
