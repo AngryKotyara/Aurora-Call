@@ -2,7 +2,7 @@
 
 Android-клиент Aurora Call живёт в том же репозитории, что и веб-приложение. Интерфейс и существующая WebRTC/чат-логика загружаются с `https://aurora-call.vercel.app`, а системные возможности Android реализуются нативно.
 
-## Что уже реализовано
+## Реализовано
 
 - отдельное Android-приложение `app.auroracall`;
 - Android 8.0+ (`minSdk 26`), compile/target SDK 36;
@@ -11,14 +11,22 @@ Android-клиент Aurora Call живёт в том же репозитори�
 - системные permissions для камеры и микрофона перед выдачей WebRTC-доступа;
 - выбор фото/файлов через Android file picker;
 - нативная демонстрация экрана через `MediaProjection`;
-- обязательный foreground service типа `mediaProjection` для современных Android;
+- foreground service типа `mediaProjection` для современных Android;
 - остановка демонстрации из системного уведомления;
 - ограничение screen-share примерно до 8 FPS и 1280 px по длинной стороне для снижения нагрузки;
+- FCM-клиент для фоновых сообщений и входящих звонков;
+- серверная привязка FCM device token к текущей сессии Aurora Call;
+- автоматическое истечение Android push-регистрации вместе с сессией;
+- удаление push-привязки перед выходом из аккаунта;
+- системное уведомление входящего звонка с действиями «Ответить» и «Отклонить»;
+- полноэкранный incoming-call UI для заблокированного устройства;
+- foreground service активного аудио/видеозвонка;
+- закрытие устаревшего системного уведомления при завершении звонка;
 - deep link для `https://aurora-call.vercel.app`;
 - используется та же иконка, что и у веб/PWA (`public/aurora-call-icon-512-v2.png`);
-- GitHub Actions собирает debug APK при изменениях Android-кода.
+- CI для debug APK и отдельный workflow для подписанных release APK/AAB.
 
-## Сборка локально
+## Debug-сборка
 
 Нужны JDK 17, Android SDK Platform 36, Build Tools 36.0.0 и Gradle 9.5+.
 
@@ -27,48 +35,71 @@ cd android
 gradle :app:assembleDebug
 ```
 
-APK:
+APK создаётся здесь:
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Для release:
+Debug-вариант использует application ID `app.auroracall.debug`. Чтобы проверять FCM именно в debug APK, в Firebase должен существовать Android app с этим application ID и соответствующий `android/app/google-services.json`.
 
-```bash
-gradle :app:assembleRelease
+## Production FCM
+
+Release application ID: `app.auroracall`.
+
+Для включения фоновых push-уведомлений нужно создать Android app `app.auroracall` в Firebase, скачать `google-services.json` и настроить серверную service account для Firebase Cloud Messaging HTTP v1.
+
+`google-services.json` не коммитится в репозиторий. Для GitHub Actions его содержимое в Base64 хранится в secret:
+
+```text
+AURORA_FIREBASE_GOOGLE_SERVICES_B64
 ```
 
-Перед публикацией release-сборку нужно подписать собственным Android keystore. Keystore и пароли не должны храниться в Git.
+Сервер `aurora-push` ожидает service account JSON в закрытой конфигурации Supabase под ключом:
+
+```text
+firebase_service_account_json
+```
+
+Ни Firebase service account, ни `google-services.json` нельзя публиковать в Git.
+
+## Release signing
+
+Workflow `.github/workflows/android-release.yml` собирает подписанные APK и AAB вручную через `workflow_dispatch`.
+
+Необходимые GitHub Actions Secrets:
+
+```text
+AURORA_FIREBASE_GOOGLE_SERVICES_B64
+AURORA_KEYSTORE_B64
+AURORA_KEYSTORE_PASSWORD
+AURORA_KEY_ALIAS
+AURORA_KEY_PASSWORD
+```
+
+Workflow декодирует Firebase config и keystore только на временном GitHub Actions runner, затем собирает:
+
+```text
+android/app/build/outputs/apk/release/app-release.apk
+android/app/build/outputs/bundle/release/app-release.aab
+```
 
 ## Как работает демонстрация экрана
 
-1. Вызов существующей функции `navigator.mediaDevices.getDisplayMedia()` внутри Android-клиента перенаправляется в нативный мост.
+1. Вызов `navigator.mediaDevices.getDisplayMedia()` внутри Android-клиента перенаправляется в нативный мост.
 2. Android показывает стандартное системное окно `MediaProjection`.
 3. `ScreenShareService` стартует как foreground service типа `mediaProjection`.
 4. Кадры снимаются через `VirtualDisplay + ImageReader`, уменьшаются до разумного разрешения и передаются обратно в main-frame WebView.
 5. В WebView кадры рисуются на canvas, а `canvas.captureStream()` создаёт video track.
-6. Существующий `src/calls.js` подменяет WebRTC video sender на этот track без второго PeerConnection.
+6. `src/calls.js` подменяет WebRTC video sender на этот track без второго PeerConnection.
 7. При остановке приложение возвращается к обычному video track камеры.
 
-## Что ещё нужно для production Android
+## Надёжность звонков
 
-### 1. Нативные push-уведомления
-
-Web Push из браузерной версии нельзя считать надёжным каналом для Android WebView. Для полноценного фонового получения сообщений/входящих звонков нужно подключить FCM (или другой Android push provider), зарегистрировать Android application ID и добавить серверную регистрацию device token.
-
-Необходимые данные для FCM нельзя безопасно выдумать или зашить без создания Android app в Firebase/Google Cloud: `project_id`, `mobilesdk_app_id`, `project_number/sender_id` и API configuration.
-
-### 2. Входящий звонок поверх заблокированного экрана
-
-После FCM следует добавить Android incoming-call notification с full-screen intent / call-style UI и foreground-service жизненный цикл вызова. Это позволит принимать вызовы, когда Aurora Call не открыт на экране.
-
-### 3. Release signing и Play distribution
-
-Нужен отдельный upload/release keystore, безопасное хранение секретов в GitHub Actions и сборка `.aab` для Google Play (если распространение пойдёт через Play).
+Клиентская логика звонков, foreground lifecycle и системный incoming-call UI реализованы. Для гарантированного установления WebRTC-соединения в сложных мобильных, корпоративных и CGNAT-сетях production-конфигурации также нужен TURN-сервер. Один STUN не гарантирует соединение для всех пар сетей.
 
 ## CI
 
-Workflow: `.github/workflows/android-build.yml`.
-
-Он использует JDK 17, Android SDK 36 и Gradle 9.5.0 и публикует artifact `aurora-call-android-debug`.
+- `.github/workflows/android-build.yml` — debug APK на каждое изменение Android-кода;
+- `.github/workflows/android-release.yml` — подписанные release APK/AAB после добавления production secrets;
+- общий `Security and build` workflow проверяет тесты, форматирование, `npm audit --audit-level=high` и production web-build.
