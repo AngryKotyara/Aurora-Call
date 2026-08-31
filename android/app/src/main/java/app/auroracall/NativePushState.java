@@ -18,6 +18,7 @@ import org.json.JSONObject;
 import org.unifiedpush.android.connector.UnifiedPush;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -31,6 +32,7 @@ final class NativePushState {
     private static final String KEY_AUTH = "unifiedpush_auth";
     private static final String KEY_TEMPORARY = "unifiedpush_temporary";
     private static final String KEY_INSTALLATION_ID = "installation_id";
+    private static final String KEY_REGISTRATION_ERROR = "registration_error";
     private static final String VAPID_PUBLIC_KEY =
             "BMNFI7gc9X-oOOTXoFTRW2oulzz68swL5TOTK5g6EIR_svfw8BHXLG1u3sSMPaj_fxQ2B2XDpPP7jj4qO86chDU";
 
@@ -46,7 +48,9 @@ final class NativePushState {
     }
 
     static void setUserEnabled(Context context, boolean enabled) {
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply();
+        SharedPreferences.Editor editor = prefs(context).edit().putBoolean(KEY_ENABLED, enabled);
+        if (!enabled) editor.remove(KEY_REGISTRATION_ERROR);
+        editor.apply();
         if (!enabled) {
             clearEndpoint(context);
             try {
@@ -102,6 +106,7 @@ final class NativePushState {
                 .putString(KEY_P256DH, p256dh)
                 .putString(KEY_AUTH, auth)
                 .putBoolean(KEY_TEMPORARY, temporary)
+                .remove(KEY_REGISTRATION_ERROR)
                 .apply();
     }
 
@@ -112,6 +117,13 @@ final class NativePushState {
                 .remove(KEY_AUTH)
                 .remove(KEY_TEMPORARY)
                 .apply();
+    }
+
+    static void setRegistrationError(Context context, String error) {
+        SharedPreferences.Editor editor = prefs(context).edit();
+        if (error == null || error.isBlank()) editor.remove(KEY_REGISTRATION_ERROR);
+        else editor.putString(KEY_REGISTRATION_ERROR, error);
+        editor.apply();
     }
 
     static String installationId(Context context) {
@@ -130,6 +142,7 @@ final class NativePushState {
         }
         try {
             if (UnifiedPush.getAckDistributor(context) != null) {
+                setRegistrationError(context, null);
                 UnifiedPush.register(
                         context,
                         INSTANCE_DEFAULT,
@@ -145,6 +158,7 @@ final class NativePushState {
             }
             UnifiedPush.tryUseCurrentOrDefaultDistributor((Activity) context, success -> {
                 if (Boolean.TRUE.equals(success)) {
+                    setRegistrationError(context, null);
                     UnifiedPush.register(
                             context,
                             INSTANCE_DEFAULT,
@@ -153,14 +167,15 @@ final class NativePushState {
                     );
                     callback.accept(token(context));
                 } else {
-                    prefs(context).edit().putBoolean(KEY_ENABLED, false).apply();
                     clearEndpoint(context);
+                    setRegistrationError(context, "no_distributor");
                     callback.accept("");
                 }
                 MainActivity.notifyNativePushStateChanged();
                 return Unit.INSTANCE;
             });
         } catch (RuntimeException ignored) {
+            setRegistrationError(context, "registration_exception");
             callback.accept(token(context));
         }
     }
@@ -202,16 +217,21 @@ final class NativePushState {
         JSONObject object = new JSONObject();
         try {
             String distributor = UnifiedPush.getAckDistributor(context);
+            List<String> distributors = UnifiedPush.getDistributors(context);
+            String currentToken = token(context);
             object.put("platform", "android");
             object.put("provider", "unifiedpush");
             object.put("enabled", notificationsAllowed(context));
             object.put("user_enabled", userEnabled(context));
-            object.put("firebase_configured", true);
+            object.put("firebase_configured", false);
             object.put("unifiedpush_configured", true);
-            object.put("distributor_available", distributor != null);
+            object.put("registered", !currentToken.isBlank());
+            object.put("distributor_available", distributors != null && !distributors.isEmpty());
+            object.put("distributor_selected", distributor != null);
             object.put("distributor", distributor == null ? "" : distributor);
+            object.put("registration_error", prefs(context).getString(KEY_REGISTRATION_ERROR, ""));
             object.put("full_screen_allowed", fullScreenAllowed(context));
-            object.put("token", token(context));
+            object.put("token", currentToken);
             object.put("installation_id", installationId(context));
             object.put("app_version", appVersion(context));
             object.put("device_model", deviceModel());
