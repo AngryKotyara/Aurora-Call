@@ -7,5 +7,5 @@ export const config = Object.freeze({
   sessionStorageKey: "aurora_session",
   mediaPermissionStoragePrefix: "aurora_media_permissions_v1",
   signalPollIntervalMs: 1_200,
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  iceServers: [{ urls: "stun:turn.auroracall.net:3478" }],
 });
