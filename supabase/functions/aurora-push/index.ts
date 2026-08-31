@@ -4,8 +4,6 @@ import webpush from "npm:web-push@3.6.7";
 
 const PROD_ORIGIN = "https://aurora-call.vercel.app";
 const APP_ICON = `${PROD_ORIGIN}/aurora-call-logo.png`;
-const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const FIREBASE_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 
 function allowedOrigin(origin: string) {
   return (
@@ -39,6 +37,23 @@ const db = createClient(supabaseUrl, serviceRole, {
 type AuroraSession = {
   userId: string;
   expiresAt: string;
+};
+
+type NotificationData = {
+  type: "call" | "message" | "call_end";
+  url: string;
+  call_id?: string;
+  friend_id?: string;
+  friend_name?: string;
+  caller_name?: string;
+  mode?: string;
+};
+
+type UnifiedPushRegistration = {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  temporary: boolean;
 };
 
 async function currentSession(
@@ -84,111 +99,6 @@ async function vapidKeys() {
   return values;
 }
 
-type FirebaseServiceAccount = {
-  project_id: string;
-  client_email: string;
-  private_key: string;
-};
-
-async function firebaseServiceAccount(): Promise<FirebaseServiceAccount | null> {
-  const values = await configValues(["firebase_service_account_json"]);
-  if (!values.firebase_service_account_json) return null;
-  try {
-    const parsed = JSON.parse(values.firebase_service_account_json);
-    if (!parsed?.project_id || !parsed?.client_email || !parsed?.private_key)
-      return null;
-    return {
-      project_id: String(parsed.project_id),
-      client_email: String(parsed.client_email),
-      private_key: String(parsed.private_key),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function base64UrlBytes(bytes: Uint8Array) {
-  let binary = "";
-  for (const value of bytes) binary += String.fromCharCode(value);
-  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
-
-function base64UrlText(value: string) {
-  return base64UrlBytes(new TextEncoder().encode(value));
-}
-
-async function importPrivateKey(pem: string) {
-  const raw = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
-    .replace(/-----END PRIVATE KEY-----/g, "")
-    .replace(/\s+/g, "");
-  const binary = atob(raw);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return crypto.subtle.importKey(
-    "pkcs8",
-    bytes,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-}
-
-let cachedGoogleAccessToken = "";
-let cachedGoogleAccessTokenUntil = 0;
-
-async function googleAccessToken(account: FirebaseServiceAccount) {
-  if (
-    cachedGoogleAccessToken &&
-    cachedGoogleAccessTokenUntil > Date.now() + 30_000
-  )
-    return cachedGoogleAccessToken;
-
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const header = base64UrlText(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claims = base64UrlText(
-    JSON.stringify({
-      iss: account.client_email,
-      scope: FIREBASE_SCOPE,
-      aud: GOOGLE_TOKEN_URL,
-      iat: issuedAt,
-      exp: issuedAt + 3600,
-    }),
-  );
-  const unsigned = `${header}.${claims}`;
-  const privateKey = await importPrivateKey(account.private_key);
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    privateKey,
-    new TextEncoder().encode(unsigned),
-  );
-  const assertion = `${unsigned}.${base64UrlBytes(new Uint8Array(signature))}`;
-  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }),
-  });
-  if (!tokenResponse.ok) throw new Error("firebase_auth_failed");
-  const tokenPayload = await tokenResponse.json();
-  if (!tokenPayload?.access_token) throw new Error("firebase_auth_failed");
-  cachedGoogleAccessToken = String(tokenPayload.access_token);
-  const expiresIn = Math.max(60, Number(tokenPayload.expires_in) || 3600);
-  cachedGoogleAccessTokenUntil = Date.now() + (expiresIn - 60) * 1000;
-  return cachedGoogleAccessToken;
-}
-
-type NotificationData = {
-  type: "call" | "message" | "call_end";
-  url: string;
-  call_id?: string;
-  friend_id?: string;
-  friend_name?: string;
-  caller_name?: string;
-  mode?: string;
-};
-
 function declarativePayload({
   title,
   body,
@@ -226,17 +136,21 @@ function declarativePayload({
   };
 }
 
-async function sendWebPushToUser(
-  userId: string,
-  payload: Record<string, unknown>,
-  ttl: number,
-) {
+async function configureWebPush() {
   const keys = await vapidKeys();
   webpush.setVapidDetails(
     "mailto:support@auroracall.net",
     keys.vapid_public_key,
     keys.vapid_private_key,
   );
+}
+
+async function sendWebPushToUser(
+  userId: string,
+  payload: Record<string, unknown>,
+  ttl: number,
+) {
+  await configureWebPush();
   const { data: subscriptions, error } = await db
     .from("aurora_push_subscriptions")
     .select("id,endpoint,p256dh,auth")
@@ -272,74 +186,99 @@ async function sendWebPushToUser(
   return delivered;
 }
 
-function stringData(data: NotificationData) {
-  return Object.fromEntries(
-    Object.entries(data)
-      .filter(([, value]) => value !== undefined && value !== null)
-      .map(([key, value]) => [key, String(value)]),
+function decodeBase64Url(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const normalized = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized);
+  return new TextDecoder().decode(
+    Uint8Array.from(binary, (char) => char.charCodeAt(0)),
   );
+}
+
+function parseUnifiedPushToken(value: string): UnifiedPushRegistration | null {
+  try {
+    const parsed = JSON.parse(decodeBase64Url(value));
+    if (parsed?.provider !== "unifiedpush" || parsed?.v !== 1) return null;
+    const endpoint = String(parsed.endpoint || "");
+    const p256dh = String(parsed.p256dh || "");
+    const auth = String(parsed.auth || "");
+    if (
+      endpoint.length < 20 ||
+      endpoint.length > 1200 ||
+      p256dh.length < 40 ||
+      p256dh.length > 200 ||
+      auth.length < 16 ||
+      auth.length > 200
+    )
+      return null;
+    return {
+      endpoint,
+      p256dh,
+      auth,
+      temporary: Boolean(parsed.temporary),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function unifiedPushEndpointAllowed(endpoint: string) {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.username || url.password) return false;
+  const values = await configValues(["unifiedpush_allowed_hosts"]);
+  const allowed = String(values.unifiedpush_allowed_hosts || "")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  if (!allowed.length) return false;
+  return allowed.includes(url.hostname.toLowerCase());
 }
 
 async function sendNativeToUser(
   userId: string,
   data: NotificationData,
   ttl: number,
-  highPriority: boolean,
 ) {
-  const account = await firebaseServiceAccount();
-  if (!account) return 0;
+  await configureWebPush();
   const { data: devices, error } = await db
     .from("aurora_native_devices")
-    .select("id,device_token")
+    .select("id,push_endpoint,p256dh,auth")
     .eq("user_id", userId)
     .eq("platform", "android")
+    .eq("push_provider", "unifiedpush")
     .gt("session_expires_at", new Date().toISOString());
   if (error) throw error;
-  if (!devices?.length) return 0;
-
-  const accessToken = await googleAccessToken(account);
   const stale: string[] = [];
   let delivered = 0;
   await Promise.all(
-    devices.map(async (device) => {
+    (devices ?? []).map(async (device) => {
+      if (!device.push_endpoint || !device.p256dh || !device.auth) {
+        stale.push(device.id);
+        return;
+      }
       try {
-        const response = await fetch(
-          `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`,
+        await webpush.sendNotification(
           {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              message: {
-                token: device.device_token,
-                data: stringData(data),
-                android: {
-                  priority: highPriority ? "HIGH" : "NORMAL",
-                  ttl: `${Math.max(0, Math.floor(ttl))}s`,
-                },
-              },
-            }),
+            endpoint: device.push_endpoint,
+            keys: { p256dh: device.p256dh, auth: device.auth },
           },
+          JSON.stringify(data),
+          { TTL: ttl },
         );
-        if (response.ok) {
-          delivered += 1;
-          return;
-        }
-        const responseText = await response.text().catch(() => "");
-        if (responseText.includes("UNREGISTERED")) stale.push(device.id);
+        delivered += 1;
+      } catch (error: any) {
+        if (error?.statusCode === 404 || error?.statusCode === 410)
+          stale.push(device.id);
         else
           console.error(
-            "aurora_fcm_send_failed",
-            response.status,
-            responseText.slice(0, 500),
+            "aurora_unifiedpush_send_failed",
+            error?.statusCode || "unknown",
           );
-      } catch (error) {
-        console.error(
-          "aurora_fcm_send_failed",
-          error instanceof Error ? error.message : "unknown",
-        );
       }
     }),
   );
@@ -353,11 +292,10 @@ async function deliverToUser(
   webPayload: Record<string, unknown>,
   nativeData: NotificationData,
   ttl: number,
-  highPriority: boolean,
 ) {
   const [web, native] = await Promise.all([
     sendWebPushToUser(userId, webPayload, ttl),
-    sendNativeToUser(userId, nativeData, ttl, highPriority),
+    sendNativeToUser(userId, nativeData, ttl),
   ]);
   return { web, native, total: web + native };
 }
@@ -446,11 +384,21 @@ Deno.serve(async (req: Request) => {
       const deviceToken = String(body.device_token || "").trim();
       if (deviceToken.length < 20 || deviceToken.length > 4096)
         return json(req, { error: "invalid_device_token" }, 400);
+      const registration = parseUnifiedPushToken(deviceToken);
+      if (
+        !registration ||
+        !(await unifiedPushEndpointAllowed(registration.endpoint))
+      )
+        return json(req, { error: "invalid_unifiedpush_endpoint" }, 400);
       const { error } = await db.from("aurora_native_devices").upsert(
         {
           user_id: userId,
           platform: "android",
+          push_provider: "unifiedpush",
           device_token: deviceToken,
+          push_endpoint: registration.endpoint,
+          p256dh: registration.p256dh,
+          auth: registration.auth,
           installation_id:
             String(body.installation_id || "").slice(0, 200) || null,
           app_version: String(body.app_version || "").slice(0, 80) || null,
@@ -462,7 +410,7 @@ Deno.serve(async (req: Request) => {
         { onConflict: "device_token" },
       );
       if (error) throw error;
-      return json(req, { ok: true });
+      return json(req, { ok: true, provider: "unifiedpush" });
     }
 
     if (action === "unsubscribe_native") {
@@ -472,7 +420,8 @@ Deno.serve(async (req: Request) => {
           .from("aurora_native_devices")
           .delete()
           .eq("device_token", deviceToken.slice(0, 4096))
-          .eq("user_id", userId);
+          .eq("user_id", userId)
+          .eq("platform", "android");
       return json(req, { ok: true });
     }
 
@@ -515,7 +464,6 @@ Deno.serve(async (req: Request) => {
         }),
         nativeData,
         120,
-        true,
       );
       return json(req, {
         ok: true,
@@ -548,7 +496,6 @@ Deno.serve(async (req: Request) => {
         nativeData,
         nativeData,
         120,
-        true,
       );
       return json(req, {
         ok: true,
@@ -586,7 +533,6 @@ Deno.serve(async (req: Request) => {
       }),
       nativeData,
       86_400,
-      true,
     );
     return json(req, {
       ok: true,
