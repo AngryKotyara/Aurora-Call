@@ -34,25 +34,21 @@ jobs:
 
       - name: Validate release secrets
         env:
-          FIREBASE_CONFIG: ${{ secrets.AURORA_FIREBASE_GOOGLE_SERVICES_B64 }}
           KEYSTORE: ${{ secrets.AURORA_KEYSTORE_B64 }}
           STORE_PASSWORD: ${{ secrets.AURORA_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.AURORA_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.AURORA_KEY_PASSWORD }}
         run: |
-          test -n "$FIREBASE_CONFIG" || { echo "Missing AURORA_FIREBASE_GOOGLE_SERVICES_B64"; exit 1; }
           test -n "$KEYSTORE" || { echo "Missing AURORA_KEYSTORE_B64"; exit 1; }
           test -n "$STORE_PASSWORD" || { echo "Missing AURORA_KEYSTORE_PASSWORD"; exit 1; }
           test -n "$KEY_ALIAS" || { echo "Missing AURORA_KEY_ALIAS"; exit 1; }
           test -n "$KEY_PASSWORD" || { echo "Missing AURORA_KEY_PASSWORD"; exit 1; }
 
-      - name: Materialize release credentials
+      - name: Materialize release keystore
         env:
-          FIREBASE_CONFIG: ${{ secrets.AURORA_FIREBASE_GOOGLE_SERVICES_B64 }}
           KEYSTORE: ${{ secrets.AURORA_KEYSTORE_B64 }}
         run: |
           umask 077
-          printf '%s' "$FIREBASE_CONFIG" | base64 --decode > android/app/google-services.json
           printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/aurora-release.jks"
 
       - name: Build signed APK and AAB
@@ -71,7 +67,7 @@ jobs:
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
-      - name: Upload Play Store AAB
+      - name: Upload release AAB
         uses: actions/upload-artifact@v4
         with:
           name: aurora-call-android-release-aab
