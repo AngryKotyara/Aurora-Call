@@ -99,7 +99,10 @@ export function initTurnCredentials() {
     REFRESH_INTERVAL_MS,
   );
 
-  window.addEventListener("online", () => void refreshTurnCredentials({ force: true }));
+  window.addEventListener(
+    "online",
+    () => void refreshTurnCredentials({ force: true }),
+  );
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void refreshTurnCredentials();
   });
