@@ -1,5 +1,7 @@
 package app.auroracall;
 
+import static org.unifiedpush.android.connector.ConstantsKt.INSTANCE_DEFAULT;
+
 import android.Manifest;
 import android.app.Activity;
 import android.app.NotificationManager;
@@ -10,20 +12,27 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
-
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.messaging.FirebaseMessaging;
+import android.util.Base64;
 
 import org.json.JSONObject;
+import org.unifiedpush.android.connector.UnifiedPush;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.function.Consumer;
+
+import kotlin.Unit;
 
 final class NativePushState {
     private static final String PREFS = "aurora_native_push";
     private static final String KEY_ENABLED = "enabled";
-    private static final String KEY_TOKEN = "fcm_token";
+    private static final String KEY_ENDPOINT = "unifiedpush_endpoint";
+    private static final String KEY_P256DH = "unifiedpush_p256dh";
+    private static final String KEY_AUTH = "unifiedpush_auth";
+    private static final String KEY_TEMPORARY = "unifiedpush_temporary";
     private static final String KEY_INSTALLATION_ID = "installation_id";
+    private static final String VAPID_PUBLIC_KEY =
+            "BMNFI7gc9X-oOOTXoFTRW2oulzz68swL5TOTK5g6EIR_svfw8BHXLG1u3sSMPaj_fxQ2B2XDpPP7jj4qO86chDU";
 
     private NativePushState() {
     }
@@ -38,15 +47,71 @@ final class NativePushState {
 
     static void setUserEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply();
+        if (!enabled) {
+            clearEndpoint(context);
+            try {
+                UnifiedPush.unregister(context, INSTANCE_DEFAULT);
+            } catch (RuntimeException ignored) {
+            }
+        }
     }
 
     static String token(Context context) {
-        return prefs(context).getString(KEY_TOKEN, "");
+        String endpoint = endpoint(context);
+        String p256dh = prefs(context).getString(KEY_P256DH, "");
+        String auth = prefs(context).getString(KEY_AUTH, "");
+        if (endpoint == null || endpoint.isBlank() || p256dh == null || p256dh.isBlank()
+                || auth == null || auth.isBlank()) {
+            return "";
+        }
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("v", 1);
+            payload.put("provider", "unifiedpush");
+            payload.put("endpoint", endpoint);
+            payload.put("p256dh", p256dh);
+            payload.put("auth", auth);
+            payload.put("temporary", prefs(context).getBoolean(KEY_TEMPORARY, false));
+            return Base64.encodeToString(
+                    payload.toString().getBytes(StandardCharsets.UTF_8),
+                    Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING
+            );
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
-    static void saveToken(Context context, String token) {
-        if (token == null || token.isBlank()) return;
-        prefs(context).edit().putString(KEY_TOKEN, token).apply();
+    private static String endpoint(Context context) {
+        return prefs(context).getString(KEY_ENDPOINT, "");
+    }
+
+    static void saveEndpoint(
+            Context context,
+            String endpoint,
+            String p256dh,
+            String auth,
+            boolean temporary
+    ) {
+        if (endpoint == null || endpoint.isBlank() || p256dh == null || p256dh.isBlank()
+                || auth == null || auth.isBlank()) {
+            clearEndpoint(context);
+            return;
+        }
+        prefs(context).edit()
+                .putString(KEY_ENDPOINT, endpoint)
+                .putString(KEY_P256DH, p256dh)
+                .putString(KEY_AUTH, auth)
+                .putBoolean(KEY_TEMPORARY, temporary)
+                .apply();
+    }
+
+    static void clearEndpoint(Context context) {
+        prefs(context).edit()
+                .remove(KEY_ENDPOINT)
+                .remove(KEY_P256DH)
+                .remove(KEY_AUTH)
+                .remove(KEY_TEMPORARY)
+                .apply();
     }
 
     static String installationId(Context context) {
@@ -58,30 +123,42 @@ final class NativePushState {
         return generated;
     }
 
-    static boolean firebaseConfigured(Context context) {
-        try {
-            FirebaseApp app;
-            try {
-                app = FirebaseApp.getInstance();
-            } catch (IllegalStateException ignored) {
-                app = FirebaseApp.initializeApp(context.getApplicationContext());
-            }
-            return app != null;
-        } catch (RuntimeException ignored) {
-            return false;
-        }
-    }
-
     static void refreshToken(Context context, Consumer<String> callback) {
-        if (!firebaseConfigured(context)) {
+        if (!userEnabled(context)) {
             callback.accept(token(context));
             return;
         }
         try {
-            FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
-                String value = task.isSuccessful() ? task.getResult() : token(context);
-                if (value != null && !value.isBlank()) saveToken(context, value);
-                callback.accept(value == null ? "" : value);
+            if (UnifiedPush.getAckDistributor(context) != null) {
+                UnifiedPush.register(
+                        context,
+                        INSTANCE_DEFAULT,
+                        "Aurora Call — звонки и сообщения",
+                        VAPID_PUBLIC_KEY
+                );
+                callback.accept(token(context));
+                return;
+            }
+            if (!(context instanceof Activity)) {
+                callback.accept(token(context));
+                return;
+            }
+            UnifiedPush.tryUseCurrentOrDefaultDistributor((Activity) context, success -> {
+                if (Boolean.TRUE.equals(success)) {
+                    UnifiedPush.register(
+                            context,
+                            INSTANCE_DEFAULT,
+                            "Aurora Call — звонки и сообщения",
+                            VAPID_PUBLIC_KEY
+                    );
+                    callback.accept(token(context));
+                } else {
+                    prefs(context).edit().putBoolean(KEY_ENABLED, false).apply();
+                    clearEndpoint(context);
+                    callback.accept("");
+                }
+                MainActivity.notifyNativePushStateChanged();
+                return Unit.INSTANCE;
             });
         } catch (RuntimeException ignored) {
             callback.accept(token(context));
@@ -89,7 +166,7 @@ final class NativePushState {
     }
 
     static boolean notificationsAllowed(Context context) {
-        if (!userEnabled(context)) return false;
+        if (!userEnabled(context) || token(context).isBlank()) return false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -124,10 +201,15 @@ final class NativePushState {
     static JSONObject json(Context context) {
         JSONObject object = new JSONObject();
         try {
+            String distributor = UnifiedPush.getAckDistributor(context);
             object.put("platform", "android");
+            object.put("provider", "unifiedpush");
             object.put("enabled", notificationsAllowed(context));
             object.put("user_enabled", userEnabled(context));
-            object.put("firebase_configured", firebaseConfigured(context));
+            object.put("firebase_configured", true);
+            object.put("unifiedpush_configured", true);
+            object.put("distributor_available", distributor != null);
+            object.put("distributor", distributor == null ? "" : distributor);
             object.put("full_screen_allowed", fullScreenAllowed(context));
             object.put("token", token(context));
             object.put("installation_id", installationId(context));
