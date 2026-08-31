@@ -4,6 +4,8 @@ import webpush from "npm:web-push@3.6.7";
 
 const PROD_ORIGIN = "https://aurora-call.vercel.app";
 const APP_ICON = `${PROD_ORIGIN}/aurora-call-logo.png`;
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const FIREBASE_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 
 function allowedOrigin(origin: string) {
   return (
@@ -55,26 +57,124 @@ async function limit(userId: string, action: string, count: number) {
     .throwOnError();
 }
 
-async function vapidKeys() {
+async function configValues(keys: string[]) {
   const { data, error } = await db
     .from("aurora_push_config")
     .select("key,value")
-    .in("key", ["vapid_public_key", "vapid_private_key"]);
+    .in("key", keys);
   if (error) throw error;
-  const values = Object.fromEntries(
-    (data ?? []).map((row) => [row.key, row.value]),
-  );
+  return Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
+}
+
+async function vapidKeys() {
+  const values = await configValues(["vapid_public_key", "vapid_private_key"]);
   if (!values.vapid_public_key || !values.vapid_private_key)
     throw new Error("vapid_not_configured");
   return values;
 }
 
+type FirebaseServiceAccount = {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+};
+
+async function firebaseServiceAccount(): Promise<FirebaseServiceAccount | null> {
+  const values = await configValues(["firebase_service_account_json"]);
+  if (!values.firebase_service_account_json) return null;
+  try {
+    const parsed = JSON.parse(values.firebase_service_account_json);
+    if (!parsed?.project_id || !parsed?.client_email || !parsed?.private_key)
+      return null;
+    return {
+      project_id: String(parsed.project_id),
+      client_email: String(parsed.client_email),
+      private_key: String(parsed.private_key),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function base64UrlBytes(bytes: Uint8Array) {
+  let binary = "";
+  for (const value of bytes) binary += String.fromCharCode(value);
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function base64UrlText(value: string) {
+  return base64UrlBytes(new TextEncoder().encode(value));
+}
+
+async function importPrivateKey(pem: string) {
+  const raw = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s+/g, "");
+  const binary = atob(raw);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return crypto.subtle.importKey(
+    "pkcs8",
+    bytes,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+}
+
+let cachedGoogleAccessToken = "";
+let cachedGoogleAccessTokenUntil = 0;
+
+async function googleAccessToken(account: FirebaseServiceAccount) {
+  if (
+    cachedGoogleAccessToken &&
+    cachedGoogleAccessTokenUntil > Date.now() + 30_000
+  )
+    return cachedGoogleAccessToken;
+
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const header = base64UrlText(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claims = base64UrlText(
+    JSON.stringify({
+      iss: account.client_email,
+      scope: FIREBASE_SCOPE,
+      aud: GOOGLE_TOKEN_URL,
+      iat: issuedAt,
+      exp: issuedAt + 3600,
+    }),
+  );
+  const unsigned = `${header}.${claims}`;
+  const privateKey = await importPrivateKey(account.private_key);
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    privateKey,
+    new TextEncoder().encode(unsigned),
+  );
+  const assertion = `${unsigned}.${base64UrlBytes(new Uint8Array(signature))}`;
+  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+  });
+  if (!tokenResponse.ok) throw new Error("firebase_auth_failed");
+  const tokenPayload = await tokenResponse.json();
+  if (!tokenPayload?.access_token) throw new Error("firebase_auth_failed");
+  cachedGoogleAccessToken = String(tokenPayload.access_token);
+  const expiresIn = Math.max(60, Number(tokenPayload.expires_in) || 3600);
+  cachedGoogleAccessTokenUntil = Date.now() + (expiresIn - 60) * 1000;
+  return cachedGoogleAccessToken;
+}
+
 type NotificationData = {
-  type: "call" | "message";
+  type: "call" | "message" | "call_end";
   url: string;
   call_id?: string;
   friend_id?: string;
   friend_name?: string;
+  caller_name?: string;
   mode?: string;
 };
 
@@ -92,8 +192,6 @@ function declarativePayload({
   appBadge?: number;
 }) {
   return {
-    // Flat fields keep existing service workers working until iOS installs the
-    // updated worker. New WebKit versions consume the declarative block.
     title,
     body,
     tag,
@@ -117,9 +215,9 @@ function declarativePayload({
   };
 }
 
-async function sendToUser(
+async function sendWebPushToUser(
   userId: string,
-  payload: ReturnType<typeof declarativePayload>,
+  payload: Record<string, unknown>,
   ttl: number,
 ) {
   const keys = await vapidKeys();
@@ -163,6 +261,95 @@ async function sendToUser(
   return delivered;
 }
 
+function stringData(data: NotificationData) {
+  return Object.fromEntries(
+    Object.entries(data)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .map(([key, value]) => [key, String(value)]),
+  );
+}
+
+async function sendNativeToUser(
+  userId: string,
+  data: NotificationData,
+  ttl: number,
+  highPriority: boolean,
+) {
+  const account = await firebaseServiceAccount();
+  if (!account) return 0;
+  const { data: devices, error } = await db
+    .from("aurora_native_devices")
+    .select("id,device_token")
+    .eq("user_id", userId)
+    .eq("platform", "android");
+  if (error) throw error;
+  if (!devices?.length) return 0;
+
+  const accessToken = await googleAccessToken(account);
+  const stale: string[] = [];
+  let delivered = 0;
+  await Promise.all(
+    devices.map(async (device) => {
+      try {
+        const response = await fetch(
+          `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              message: {
+                token: device.device_token,
+                data: stringData(data),
+                android: {
+                  priority: highPriority ? "HIGH" : "NORMAL",
+                  ttl: `${Math.max(0, Math.floor(ttl))}s`,
+                },
+              },
+            }),
+          },
+        );
+        if (response.ok) {
+          delivered += 1;
+          return;
+        }
+        const responseText = await response.text().catch(() => "");
+        if (responseText.includes("UNREGISTERED")) stale.push(device.id);
+        else
+          console.error(
+            "aurora_fcm_send_failed",
+            response.status,
+            responseText.slice(0, 500),
+          );
+      } catch (error) {
+        console.error(
+          "aurora_fcm_send_failed",
+          error instanceof Error ? error.message : "unknown",
+        );
+      }
+    }),
+  );
+  if (stale.length)
+    await db.from("aurora_native_devices").delete().in("id", stale);
+  return delivered;
+}
+
+async function deliverToUser(
+  userId: string,
+  webPayload: Record<string, unknown>,
+  nativeData: NotificationData,
+  ttl: number,
+  highPriority: boolean,
+) {
+  const [web, native] = await Promise.all([
+    sendWebPushToUser(userId, webPayload, ttl),
+    sendNativeToUser(userId, nativeData, ttl, highPriority),
+  ]);
+  return { web, native, total: web + native };
+}
+
 async function unreadMessageCount(userId: string) {
   const { count, error } = await db
     .from("chat_messages")
@@ -190,9 +377,15 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const action = String(body?.action || "");
     if (
-      !["subscribe", "unsubscribe", "notify_call", "notify_message"].includes(
-        action,
-      )
+      ![
+        "subscribe",
+        "unsubscribe",
+        "subscribe_native",
+        "unsubscribe_native",
+        "notify_call",
+        "notify_message",
+        "notify_call_end",
+      ].includes(action)
     )
       return json(req, { error: "unknown_action" }, 400);
 
@@ -236,6 +429,38 @@ Deno.serve(async (req: Request) => {
       return json(req, { ok: true });
     }
 
+    if (action === "subscribe_native") {
+      const deviceToken = String(body.device_token || "").trim();
+      if (deviceToken.length < 20 || deviceToken.length > 4096)
+        return json(req, { error: "invalid_device_token" }, 400);
+      const { error } = await db.from("aurora_native_devices").upsert(
+        {
+          user_id: userId,
+          platform: "android",
+          device_token: deviceToken,
+          installation_id: String(body.installation_id || "").slice(0, 200) || null,
+          app_version: String(body.app_version || "").slice(0, 80) || null,
+          device_model: String(body.device_model || "").slice(0, 200) || null,
+          updated_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+        },
+        { onConflict: "device_token" },
+      );
+      if (error) throw error;
+      return json(req, { ok: true });
+    }
+
+    if (action === "unsubscribe_native") {
+      const deviceToken = String(body.device_token || "").trim();
+      if (deviceToken)
+        await db
+          .from("aurora_native_devices")
+          .delete()
+          .eq("device_token", deviceToken.slice(0, 4096))
+          .eq("user_id", userId);
+      return json(req, { ok: true });
+    }
+
     const { data: sender } = await db
       .from("call_users")
       .select("username")
@@ -255,7 +480,14 @@ Deno.serve(async (req: Request) => {
         .in("status", ["started", "answered"])
         .maybeSingle();
       if (!call) return json(req, { error: "call_not_found" }, 404);
-      const delivered = await sendToUser(
+      const nativeData: NotificationData = {
+        type: "call",
+        url: `/?push=call&call_id=${encodeURIComponent(callId)}`,
+        call_id: String(callId),
+        caller_name: senderName,
+        mode: call.mode,
+      };
+      const delivery = await deliverToUser(
         recipientId,
         declarativePayload({
           title: `${senderName} звонит вам`,
@@ -264,16 +496,50 @@ Deno.serve(async (req: Request) => {
               ? "Видеозвонок Aurora Call"
               : "Аудиозвонок Aurora Call",
           tag: `call-${callId}`,
-          data: {
-            type: "call",
-            url: `/?push=call&call_id=${encodeURIComponent(callId)}`,
-            call_id: callId,
-            mode: call.mode,
-          },
+          data: nativeData,
         }),
+        nativeData,
         120,
+        true,
       );
-      return json(req, { ok: true, delivered });
+      return json(req, {
+        ok: true,
+        delivered: delivery.total,
+        web_delivered: delivery.web,
+        native_delivered: delivery.native,
+      });
+    }
+
+    if (action === "notify_call_end") {
+      const callId = String(body.call_id || "");
+      if (!/^[0-9a-f-]{36}$/i.test(callId))
+        return json(req, { error: "invalid_call_id" }, 400);
+      const { data: call } = await db
+        .from("call_history")
+        .select("call_id,caller_id,callee_id")
+        .eq("call_id", callId)
+        .or(`caller_id.eq.${userId},callee_id.eq.${userId}`)
+        .maybeSingle();
+      if (!call) return json(req, { error: "call_not_found" }, 404);
+      const recipientId = call.caller_id === userId ? call.callee_id : call.caller_id;
+      const nativeData: NotificationData = {
+        type: "call_end",
+        url: "/",
+        call_id: callId,
+      };
+      const delivery = await deliverToUser(
+        recipientId,
+        nativeData,
+        nativeData,
+        120,
+        true,
+      );
+      return json(req, {
+        ok: true,
+        delivered: delivery.total,
+        web_delivered: delivery.web,
+        native_delivered: delivery.native,
+      });
     }
 
     const messageId = Number(body.message_id);
@@ -287,23 +553,31 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (!message) return json(req, { error: "message_not_found" }, 404);
     const unread = await unreadMessageCount(recipientId);
-    const delivered = await sendToUser(
+    const nativeData: NotificationData = {
+      type: "message",
+      url: `/?push=message&friend_id=${encodeURIComponent(userId)}&friend_name=${encodeURIComponent(senderName)}`,
+      friend_id: userId,
+      friend_name: senderName,
+    };
+    const delivery = await deliverToUser(
       recipientId,
       declarativePayload({
         title: senderName,
         body: "Новое сообщение",
         tag: `message-${message.id}`,
         appBadge: unread,
-        data: {
-          type: "message",
-          url: `/?push=message&friend_id=${encodeURIComponent(userId)}&friend_name=${encodeURIComponent(senderName)}`,
-          friend_id: userId,
-          friend_name: senderName,
-        },
+        data: nativeData,
       }),
+      nativeData,
       86_400,
+      true,
     );
-    return json(req, { ok: true, delivered });
+    return json(req, {
+      ok: true,
+      delivered: delivery.total,
+      web_delivered: delivery.web,
+      native_delivered: delivery.native,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
     if (message.includes("rate_limited"))
