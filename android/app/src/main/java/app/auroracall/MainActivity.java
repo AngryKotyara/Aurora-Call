@@ -27,6 +27,7 @@ import androidx.webkit.WebViewFeature;
 
 import org.json.JSONObject;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -38,6 +39,8 @@ public final class MainActivity extends Activity implements ScreenShareService.L
     private static final int REQUEST_WEB_MEDIA = 2101;
     private static final int REQUEST_FILE_CHOOSER = 2102;
     private static final int REQUEST_SCREEN_CAPTURE = 2103;
+    private static final int REQUEST_NOTIFICATIONS = 2104;
+    private static WeakReference<MainActivity> activeInstance = new WeakReference<>(null);
 
     private WebView webView;
     private boolean nativeBridgeAvailable;
@@ -48,9 +51,11 @@ public final class MainActivity extends Activity implements ScreenShareService.L
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        activeInstance = new WeakReference<>(this);
 
         getWindow().setStatusBarColor(Color.rgb(7, 7, 12));
         getWindow().setNavigationBarColor(Color.rgb(7, 7, 12));
+        AuroraNotifications.ensureChannels(this);
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(7, 7, 12));
@@ -59,6 +64,12 @@ public final class MainActivity extends Activity implements ScreenShareService.L
         configureWebView();
         ScreenShareService.setListener(this);
         webView.loadUrl(resolveLaunchUrl(getIntent()));
+    }
+
+    public static void notifyNativePushStateChanged() {
+        MainActivity activity = activeInstance.get();
+        if (activity == null) return;
+        activity.runOnUiThread(() -> activity.emitNativePushState(false));
     }
 
     private void configureWebView() {
@@ -72,7 +83,7 @@ public final class MainActivity extends Activity implements ScreenShareService.L
         settings.setAllowContentAccess(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " AuroraCallAndroid/1.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " AuroraCallAndroid/1.1");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
@@ -101,6 +112,16 @@ public final class MainActivity extends Activity implements ScreenShareService.L
                                 if (isTrustedCurrentPage()) stopScreenCapture();
                             });
                         }
+                    }
+            );
+            WebViewCompat.addWebMessageListener(
+                    webView,
+                    "AuroraNative",
+                    Collections.singleton(TRUSTED_ORIGIN),
+                    (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
+                        if (!isMainFrame || !isTrustedUri(sourceOrigin)) return;
+                        if (message.getType() != WebMessageCompat.TYPE_STRING) return;
+                        handleNativeMessage(message.getData());
                     }
             );
         }
@@ -133,6 +154,7 @@ public final class MainActivity extends Activity implements ScreenShareService.L
                 super.onPageFinished(view, url);
                 if (nativeBridgeAvailable && isTrustedUri(Uri.parse(url))) {
                     injectAndroidScreenShareBridge();
+                    emitNativePushState(true);
                 }
             }
         });
@@ -173,6 +195,98 @@ public final class MainActivity extends Activity implements ScreenShareService.L
                 }
             }
         });
+    }
+
+    private void handleNativeMessage(String rawMessage) {
+        runOnUiThread(() -> {
+            if (!isTrustedCurrentPage() || rawMessage == null) return;
+            try {
+                JSONObject message = new JSONObject(rawMessage);
+                String action = message.optString("action", "");
+                switch (action) {
+                    case "get_notification_state":
+                        emitNativePushState(true);
+                        break;
+                    case "enable_notifications":
+                        enableNativeNotifications();
+                        break;
+                    case "disable_notifications":
+                        NativePushState.setUserEnabled(this, false);
+                        emitNativePushState(false);
+                        break;
+                    case "open_full_screen_settings":
+                        NativePushState.openFullScreenSettings(this);
+                        break;
+                    case "call_active":
+                        startCallForegroundService(message);
+                        break;
+                    case "call_ended":
+                        stopCallForegroundService();
+                        AuroraNotifications.cancelIncomingCall(
+                                this,
+                                message.optString("call_id", "")
+                        );
+                        break;
+                    default:
+                        break;
+                }
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    private void enableNativeNotifications() {
+        NativePushState.setUserEnabled(this, true);
+        AuroraNotifications.ensureChannels(this);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                    REQUEST_NOTIFICATIONS
+            );
+            return;
+        }
+        emitNativePushState(true);
+    }
+
+    private void emitNativePushState(boolean refreshToken) {
+        if (webView == null || !isTrustedCurrentPage()) return;
+        if (refreshToken && NativePushState.userEnabled(this)) {
+            NativePushState.refreshToken(this, token -> runOnUiThread(this::emitNativePushStateNow));
+            return;
+        }
+        emitNativePushStateNow();
+    }
+
+    private void emitNativePushStateNow() {
+        if (webView == null || !isTrustedCurrentPage()) return;
+        JSONObject state = NativePushState.json(this);
+        String javascript = "document.dispatchEvent(new CustomEvent('aurora-native-push-state',{detail:"
+                + state + "}));";
+        webView.evaluateJavascript(javascript, null);
+    }
+
+    private void startCallForegroundService(JSONObject message) {
+        String callId = message.optString("call_id", "active");
+        String peerName = message.optString("peer_name", "Aurora Call");
+        String mode = "video".equals(message.optString("mode", "audio")) ? "video" : "audio";
+        Intent serviceIntent = CallForegroundService.startIntent(this, callId, peerName, mode);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private void stopCallForegroundService() {
+        try {
+            stopService(new Intent(this, CallForegroundService.class));
+        } catch (RuntimeException ignored) {
+        }
     }
 
     private void handleWebPermissionRequest(PermissionRequest request) {
@@ -226,6 +340,10 @@ public final class MainActivity extends Activity implements ScreenShareService.L
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_NOTIFICATIONS) {
+            emitNativePushState(true);
+            return;
+        }
         if (requestCode != REQUEST_WEB_MEDIA) return;
 
         boolean granted = grantResults.length > 0;
@@ -415,8 +533,15 @@ public final class MainActivity extends Activity implements ScreenShareService.L
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        emitNativePushState(false);
+    }
+
+    @Override
     protected void onDestroy() {
         ScreenShareService.setListener(null);
+        if (activeInstance.get() == this) activeInstance.clear();
         if (pendingFileCallback != null) pendingFileCallback.onReceiveValue(null);
         if (pendingWebPermission != null) pendingWebPermission.deny();
         pendingFileCallback = null;
