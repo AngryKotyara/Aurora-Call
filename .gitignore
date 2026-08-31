@@ -5,3 +5,10 @@ dist/
 .env.*
 !.env.example
 npm-debug.log*
+
+# Android
+android/.gradle/
+android/**/build/
+android/local.properties
+*.jks
+*.keystore
