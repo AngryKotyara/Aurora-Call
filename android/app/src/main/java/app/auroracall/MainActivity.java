@@ -33,9 +33,9 @@ import java.util.Collections;
 import java.util.List;
 
 public final class MainActivity extends Activity implements ScreenShareService.Listener {
-    private static final String WEB_URL = "https://aurora-call.vercel.app";
-    private static final String TRUSTED_ORIGIN = "https://aurora-call.vercel.app";
-    private static final String TRUSTED_HOST = "aurora-call.vercel.app";
+    private static final String WEB_URL = BuildConfig.AURORA_WEB_URL;
+    private static final String TRUSTED_ORIGIN = BuildConfig.AURORA_TRUSTED_ORIGIN;
+    private static final String TRUSTED_HOST = BuildConfig.AURORA_TRUSTED_HOST;
     private static final int REQUEST_WEB_MEDIA = 2101;
     private static final int REQUEST_FILE_CHOOSER = 2102;
     private static final int REQUEST_SCREEN_CAPTURE = 2103;
@@ -83,7 +83,7 @@ public final class MainActivity extends Activity implements ScreenShareService.L
         settings.setAllowContentAccess(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " AuroraCallAndroid/1.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " AuroraCallAndroid/1.3");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
