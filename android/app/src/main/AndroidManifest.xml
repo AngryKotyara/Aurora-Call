@@ -53,10 +53,10 @@
             android:theme="@style/AppTheme" />
 
         <service
-            android:name=".AuroraMessagingService"
+            android:name=".AuroraPushService"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />
             </intent-filter>
         </service>
 
@@ -69,10 +69,6 @@
             android:name=".ScreenShareService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
-
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_notification" />
     </application>
 
 </manifest>
