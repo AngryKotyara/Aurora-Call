@@ -16,6 +16,22 @@ export function postAndroidNative(action, payload = {}) {
   }
 }
 
+export function requestAndroidNotificationState() {
+  return postAndroidNative("get_notification_state");
+}
+
+export function enableAndroidNotifications() {
+  return postAndroidNative("enable_notifications");
+}
+
+export function disableAndroidNotifications() {
+  return postAndroidNative("disable_notifications");
+}
+
+export function openAndroidFullScreenSettings() {
+  return postAndroidNative("open_full_screen_settings");
+}
+
 export function notifyAndroidCallActive({ callId, peerName, mode }) {
   return postAndroidNative("call_active", {
     call_id: String(callId || ""),
