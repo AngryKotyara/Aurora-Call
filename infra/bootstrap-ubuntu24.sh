@@ -28,7 +28,6 @@ require() {
 
 require TURN_SHARED_SECRET
 require NTFY_DISTRIBUTOR_PASSWORD
-require CERTBOT_EMAIL
 
 if [[ ${#TURN_SHARED_SECRET} -lt 32 ]]; then
   echo "TURN_SHARED_SECRET must be at least 32 characters" >&2
@@ -69,7 +68,7 @@ systemctl enable --now docker
 
 PUBLIC_IP="${TURN_EXTERNAL_IP:-}"
 if [[ -z "${PUBLIC_IP}" ]]; then
-  PUBLIC_IP="$(curl -4fsS --max-time 10 https://api.ipify.org || true)"
+  PUBLIC_IP="$(dig +short A "${TURN_DOMAIN}" | tail -n1)"
 fi
 if [[ -z "${PUBLIC_IP}" ]]; then
   echo "Unable to determine public IPv4. Set TURN_EXTERNAL_IP explicitly." >&2
@@ -107,13 +106,20 @@ ufw --force enable
 
 # Obtain the TURN TLS certificate before Caddy binds port 80.
 if [[ ! -f "/etc/letsencrypt/live/${TURN_DOMAIN}/fullchain.pem" ]]; then
-  certbot certonly \
-    --standalone \
-    --non-interactive \
-    --agree-tos \
-    --no-eff-email \
-    --email "${CERTBOT_EMAIL}" \
+  CERTBOT_ARGS=(
+    certonly
+    --standalone
+    --non-interactive
+    --agree-tos
+    --no-eff-email
     -d "${TURN_DOMAIN}"
+  )
+  if [[ -n "${CERTBOT_EMAIL:-}" ]]; then
+    CERTBOT_ARGS+=(--email "${CERTBOT_EMAIL}")
+  else
+    CERTBOT_ARGS+=(--register-unsafely-without-email)
+  fi
+  certbot "${CERTBOT_ARGS[@]}"
 fi
 
 cat >"${AURORA_INFRA_DIR}/coturn/.env" <<EOF
