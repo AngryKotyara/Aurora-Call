@@ -2,20 +2,7 @@
 // Existing login/registration handlers from ui.js are preserved by moving their live controls.
 const root = document.getElementById("root");
 
-const logo = `<svg class="auth-a-logo" viewBox="0 0 180 150" aria-hidden="true">
-  <defs>
-    <linearGradient id="auroraA" x1="25" y1="12" x2="150" y2="140" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#f0a6ff"/><stop offset=".38" stop-color="#a64cff"/><stop offset="1" stop-color="#5634d8"/>
-    </linearGradient>
-    <linearGradient id="auroraWave" x1="25" y1="85" x2="155" y2="85" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#532bd6"/><stop offset=".48" stop-color="#f17cff"/><stop offset="1" stop-color="#6435e5"/>
-    </linearGradient>
-    <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  </defs>
-  <path d="M34 126 79 26c4-9 17-9 21 0l46 100-21-11-35-75-35 76-21 10Z" fill="url(#auroraA)" filter="url(#glow)"/>
-  <path d="M23 99c23 7 41-10 58-15 23-7 38 7 54 9 12 2 21-2 29-8-8 13-20 21-35 19-19-2-31-13-49-8-18 5-32 19-57 12Z" fill="url(#auroraWave)" filter="url(#glow)"/>
-  <path d="M83 102c5-6 9-6 13-1l6 8c2 3 1 6-2 8l-4 3c4 7 9 12 16 16l4-4c3-2 6-2 8 0l8 6c5 4 5 8 0 13-5 5-12 7-19 4-18-8-31-21-39-39-3-6 0-10 9-14Z" fill="#8d47ff" filter="url(#glow)"/>
-</svg>`;
+const logo = `<img class="auth-a-logo" src="/aurora-call-icon-v2.png" alt="" aria-hidden="true" />`;
 
 const mailIcon = `<svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m5 7 7 5 7-5"/></svg>`;
 const lockIcon = `<svg viewBox="0 0 24 24"><rect x="5.5" y="10" width="13" height="10" rx="2.5"/><path d="M8.5 10V7a3.5 3.5 0 0 1 7 0v3"/></svg>`;
@@ -38,7 +25,7 @@ function installStyle() {
   .auth-v2::before{left:-45%;background:linear-gradient(120deg,transparent 12%,rgba(49,121,255,.58) 47%,rgba(102,65,255,.18) 72%,transparent 86%);transform:rotate(29deg)}
   .auth-v2::after{right:-45%;background:linear-gradient(240deg,transparent 12%,rgba(183,45,255,.62) 47%,rgba(102,65,255,.17) 72%,transparent 86%);transform:rotate(-29deg)}
   .auth-v2-brand{display:flex;flex-direction:column;align-items:center;text-align:center;margin-top:8px}
-  .auth-a-logo{display:block;width:132px;height:112px;overflow:visible;filter:drop-shadow(0 0 15px rgba(162,73,255,.62));margin-bottom:8px}
+  .auth-a-logo{display:block;width:112px;height:112px;margin-bottom:12px;border:1px solid rgba(150,115,255,.24);border-radius:26px;object-fit:cover;box-shadow:0 16px 42px rgba(0,0,0,.34),0 0 34px rgba(89,102,255,.28)}
   .auth-v2-brand h1{margin:0;color:#fff;font-size:42px;line-height:1.04;font-weight:650;letter-spacing:-1.7px}
   .auth-v2-brand p{margin:13px 0 28px;color:#afb1c1;font-size:17px;font-weight:400;letter-spacing:.05px}
   .auth-v2-card{width:100%;padding:30px 24px 25px;border:1px solid rgba(128,74,255,.78);border-radius:29px;background:linear-gradient(150deg,rgba(18,23,50,.86),rgba(7,9,25,.94));box-shadow:0 28px 80px rgba(0,0,0,.43),inset 0 1px rgba(255,255,255,.035);backdrop-filter:blur(25px);-webkit-backdrop-filter:blur(25px)}
@@ -63,7 +50,7 @@ function installStyle() {
   .auth-v2-registration .card{background:rgba(8,11,28,.65);border-color:rgba(118,123,164,.3)}
   .auth-v2-back{width:100%;min-height:52px;margin-top:10px;border:1px solid rgba(118,123,164,.3);border-radius:17px;background:rgba(11,14,31,.8);color:#fff;font-weight:700}
   .auth-v2[aria-busy="true"]{pointer-events:none;opacity:.9}
-  @media(max-width:390px){.auth-v2{padding-left:16px;padding-right:16px}.auth-a-logo{width:116px;height:99px}.auth-v2-brand h1{font-size:36px}.auth-v2-brand p{font-size:15px;margin-bottom:24px}.auth-v2-card,.auth-v2-registration{padding:25px 17px 20px;border-radius:25px}.auth-v2-card h2{font-size:26px}.auth-v2-socials{gap:9px}.auth-v2-social{font-size:14px}}
+  @media(max-width:390px){.auth-v2{padding-left:16px;padding-right:16px}.auth-a-logo{width:100px;height:100px;border-radius:23px}.auth-v2-brand h1{font-size:36px}.auth-v2-brand p{font-size:15px;margin-bottom:24px}.auth-v2-card,.auth-v2-registration{padding:25px 17px 20px;border-radius:25px}.auth-v2-card h2{font-size:26px}.auth-v2-socials{gap:9px}.auth-v2-social{font-size:14px}}
   `;
 }
 

@@ -59,27 +59,29 @@ test("PWA and viewport metadata allow rotation, safe areas, and user zoom", () =
     "utf8",
   );
   const icon = readFileSync(
-    new URL("../public/aurora-call-logo.png", import.meta.url),
+    new URL("../public/aurora-call-icon-192-v2.png", import.meta.url),
   );
 
   assert.equal(manifest.orientation, "any");
   assert.equal(manifest.id, "/");
-  assert.equal(manifest.icons[0].src, "/aurora-call-logo.png");
-  assert.equal(manifest.icons[0].sizes, "1254x1254");
-  assert.equal(icon.readUInt32BE(16), 1254);
-  assert.equal(icon.readUInt32BE(20), 1254);
+  assert.equal(manifest.icons[0].src, "/aurora-call-icon-192-v2.png");
+  assert.equal(manifest.icons[0].sizes, "192x192");
+  assert.equal(manifest.icons[1].src, "/aurora-call-icon-512-v2.png");
+  assert.equal(manifest.icons[1].purpose, "any maskable");
+  assert.equal(icon.readUInt32BE(16), 192);
+  assert.equal(icon.readUInt32BE(20), 192);
   assert.match(
     serviceWorker,
-    /icon: notification\.icon \|\| "\/aurora-call-logo\.png"/,
+    /icon: notification\.icon \|\| "\/aurora-call-icon-192-v2\.png"/,
   );
   assert.match(
     serviceWorker,
-    /badge: notification\.badge \|\| "\/aurora-call-logo\.png"/,
+    /badge: notification\.badge \|\| "\/aurora-call-icon-192-v2\.png"/,
   );
   assert.match(serviceWorker, /payload\.notification \|\| payload/);
   assert.match(serviceWorker, /notification\.app_badge/);
   assert.match(html, /viewport-fit=cover/);
-  assert.match(html, /href="\/aurora-call-logo\.png"/);
+  assert.match(html, /href="\/apple-touch-icon-v2\.png"/);
   assert.doesNotMatch(html, /user-scalable=no/);
   assert.doesNotMatch(html, /maximum-scale/);
   assert.match(styles, /safe-area-inset-bottom/);

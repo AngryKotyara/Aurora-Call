@@ -66,7 +66,7 @@ test("main screen renders the logo, waves, history, and friend removal controls"
 
   assert.match(
     document.querySelector(".brand-logo")?.getAttribute("src") || "",
-    /aurora-call-logo\.png$/,
+    /aurora-call-icon-v2\.png$/,
   );
   assert.ok(document.querySelector(".xperia-flow svg"));
   assert.equal(document.querySelectorAll("[data-nav]").length, 4);

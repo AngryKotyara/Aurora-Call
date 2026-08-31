@@ -1,5 +1,10 @@
-const CACHE = "aurora-shell-v7";
-const SHELL = ["/", "/index.html", "/manifest.webmanifest"];
+const CACHE = "aurora-shell-v8";
+const SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/aurora-call-icon-192-v2.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
@@ -88,8 +93,8 @@ self.addEventListener("push", (event) => {
     tag: notification.tag || `aurora-${Date.now()}`,
     renotify: notificationData.type === "call",
     requireInteraction: notificationData.type === "call",
-    icon: notification.icon || "/aurora-call-logo.png",
-    badge: notification.badge || "/aurora-call-logo.png",
+    icon: notification.icon || "/aurora-call-icon-192-v2.png",
+    badge: notification.badge || "/aurora-call-icon-192-v2.png",
     data: {
       url: notification.navigate || notificationData.url || "/",
       type: notificationData.type || "generic",

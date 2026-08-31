@@ -11,10 +11,16 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "/aurora-call-logo.png",
-      "sizes": "1254x1254",
+      "src": "/aurora-call-icon-192-v2.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/aurora-call-icon-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
