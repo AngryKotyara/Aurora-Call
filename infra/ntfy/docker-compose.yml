@@ -1,0 +1,43 @@
+services:
+  ntfy:
+    image: binwiederhier/ntfy:v2.28.0
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: https://push.auroracall.net
+      NTFY_LISTEN_HTTP: :80
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_ENABLE_LOGIN: "true"
+      NTFY_KEEPALIVE_INTERVAL: 2m
+    volumes:
+      - ./data:/var/lib/ntfy
+    expose:
+      - "80"
+    networks:
+      - push
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - ntfy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - push
+
+networks:
+  push:
+
+volumes:
+  caddy_data:
+  caddy_config:
