@@ -175,7 +175,7 @@ test("call controls update media tracks and restore the camera after screen shar
   await startCall("video");
 
   assert.deepEqual(PeerConnectionMock.lastConfiguration, {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    iceServers: [{ urls: "stun:turn.auroracall.net:3478" }],
   });
 
   const microphoneButton = document.querySelector("#toggle-mic");
