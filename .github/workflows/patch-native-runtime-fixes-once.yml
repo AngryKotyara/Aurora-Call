@@ -1,0 +1,178 @@
+name: Patch Android runtime fixes once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Inject native tablet and UnifiedPush fallback
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('android/app/src/main/java/app/auroracall/MainActivity.java')
+          s = p.read_text()
+          old = '''                if (nativeBridgeAvailable && isTrustedUri(Uri.parse(url))) {
+                    injectAndroidScreenShareBridge();
+                    emitNativePushState(true);
+                }
+'''
+          new = '''                if (nativeBridgeAvailable && isTrustedUri(Uri.parse(url))) {
+                    injectAndroidScreenShareBridge();
+                    injectAndroidRuntimeFixes();
+                    emitNativePushState(true);
+                }
+'''
+          if old not in s:
+              raise SystemExit('onPageFinished patch point not found')
+          s = s.replace(old, new, 1)
+
+          marker = '''    private void handleNativeMessage(String rawMessage) {
+'''
+          method = r'''    private void injectAndroidRuntimeFixes() {
+        if (webView == null || !isTrustedCurrentPage()) return;
+        String javascript = """
+                (() => {
+                  if (!document.getElementById('aurora-android-runtime-fixes')) {
+                    const style = document.createElement('style');
+                    style.id = 'aurora-android-runtime-fixes';
+                    style.textContent = `
+                      @media (min-width: 700px) {
+                        .app { width: 100% !important; max-width: 900px !important; padding-left: max(28px, env(safe-area-inset-left)) !important; padding-right: max(28px, env(safe-area-inset-right)) !important; }
+                        .home-screen-flow { width: 100% !important; max-width: 820px !important; margin-left: auto !important; margin-right: auto !important; }
+                        .home-screen-flow > .grid, .home-screen-flow > h2, .home-screen-flow > .card { width: 100% !important; max-width: 760px !important; margin-left: auto !important; margin-right: auto !important; }
+                        .nav { width: min(640px, calc(100% - 56px)) !important; max-width: 640px !important; }
+                      }
+                      @media (min-width: 700px) and (orientation: landscape) and (max-height: 760px) {
+                        .app { padding-top: max(10px, env(safe-area-inset-top)) !important; padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
+                        .home-screen-flow { min-height: calc(100dvh - 20px) !important; }
+                        .home-hero { min-height: clamp(245px, 45dvh, 315px) !important; }
+                        .home-hero .hero-brand { top: 10px !important; }
+                        .home-hero .hero-brand .brand-logo-frame { width: 44px !important; height: 44px !important; }
+                        .home-hero .hero-brand .brand-logo { width: 62px !important; height: 62px !important; }
+                        .home-hero .stay-in-touch-copy h1 { top: 53% !important; font-size: clamp(34px, 5.2vw, 56px) !important; letter-spacing: .15em !important; }
+                        .home-screen-flow > .grid { max-width: 720px !important; gap: 14px !important; margin-top: -12px !important; }
+                        .home-screen-flow > .grid .call { min-height: 86px !important; padding: 13px 15px !important; border-radius: 22px !important; }
+                        .home-call-icon { width: 42px !important; height: 42px !important; border-radius: 14px !important; }
+                        .home-screen-flow > h2 { max-width: 720px !important; margin-top: 14px !important; margin-bottom: 8px !important; }
+                        .home-screen-flow > .card { max-width: 720px !important; }
+                        .nav { bottom: max(10px, env(safe-area-inset-bottom)) !important; width: min(620px, calc(100% - 72px)) !important; padding-top: 8px !important; padding-bottom: 8px !important; }
+                      }
+                    `;
+                    document.head.appendChild(style);
+                  }
+
+                  if (window.__auroraAndroidRuntimePushFix) return;
+                  window.__auroraAndroidRuntimePushFix = true;
+                  let lastState = null;
+
+                  const postNative = (action) => {
+                    try {
+                      window.AuroraNative?.postMessage(JSON.stringify({ action }));
+                    } catch (_) {}
+                  };
+
+                  const pushCopy = (state) => {
+                    if (!state?.distributor_available) return {
+                      title: 'Нужен сервис доставки уведомлений',
+                      text: 'Aurora Call работает без Google через UnifiedPush. Установите ntfy из F-Droid, затем вернитесь в приложение.',
+                      action: 'Установить ntfy',
+                      mode: 'install'
+                    };
+                    if (state.user_enabled && !state.registered) return {
+                      title: 'Подключите сервис уведомлений',
+                      text: state.distributor_selected ? 'Android ещё не выдал push-endpoint. Повторите подключение.' : 'Выберите ntfy как сервис UnifiedPush для Aurora Call.',
+                      action: 'Подключить',
+                      mode: 'enable'
+                    };
+                    if (state.enabled && !state.full_screen_allowed) return {
+                      title: 'Фоновые уведомления включены',
+                      text: 'Сообщения будут приходить. Разрешите полноэкранные уведомления для входящих звонков на экране блокировки.',
+                      action: 'Разрешить звонки',
+                      mode: 'full_screen',
+                      enabled: true
+                    };
+                    if (state.enabled) return {
+                      title: 'Фоновые уведомления включены',
+                      text: 'Aurora Call сможет сообщать о сообщениях и входящих звонках, даже когда приложение закрыто.',
+                      action: 'Выключить уведомления',
+                      mode: 'disable',
+                      enabled: true
+                    };
+                    return {
+                      title: 'Уведомления о звонках и сообщениях',
+                      text: 'Получайте системные Android-уведомления без Firebase через UnifiedPush.',
+                      action: 'Включить уведомления',
+                      mode: 'enable'
+                    };
+                  };
+
+                  const renderPush = () => {
+                    if (!lastState) return;
+                    const settings = [...document.querySelectorAll('.screen')].find((screen) => screen.querySelector('#logout'));
+                    if (!settings) return;
+                    let card = settings.querySelector('[data-push-settings]');
+                    if (!card) {
+                      card = document.createElement('div');
+                      card.className = 'card media-access';
+                      card.dataset.pushSettings = '';
+                      const anchor = settings.querySelector('#logout');
+                      settings.insertBefore(card, anchor || null);
+                    }
+                    const copy = pushCopy(lastState);
+                    const signature = JSON.stringify(copy);
+                    if (card.dataset.androidRuntimeSignature === signature) return;
+                    card.dataset.androidRuntimeSignature = signature;
+                    card.classList.toggle('granted', Boolean(copy.enabled));
+                    card.innerHTML = `<span class="media-access-icon" aria-hidden="true">${copy.enabled ? '✓' : '●'}</span><div class="media-access-copy"><h2>${copy.title}</h2><p class="muted">${copy.text}</p></div><button class="btn ${copy.enabled ? 'ghost' : ''}" data-android-runtime-push>${copy.action}</button>`;
+                    card.querySelector('[data-android-runtime-push]')?.addEventListener('click', () => {
+                      if (copy.mode === 'install') {
+                        location.href = 'https://f-droid.org/packages/io.heckel.ntfy/';
+                        return;
+                      }
+                      if (copy.mode === 'full_screen') {
+                        postNative('open_full_screen_settings');
+                        return;
+                      }
+                      if (copy.mode === 'disable') {
+                        postNative('disable_notifications');
+                        return;
+                      }
+                      postNative('enable_notifications');
+                    });
+                  };
+
+                  document.addEventListener('aurora-native-push-state', (event) => {
+                    lastState = event.detail || null;
+                    renderPush();
+                  });
+                  new MutationObserver(renderPush).observe(document.documentElement, { childList: true, subtree: true });
+                  postNative('get_notification_state');
+                })();
+                """;
+        webView.evaluateJavascript(javascript, null);
+    }
+
+'''
+          if marker not in s:
+              raise SystemExit('method insertion point not found')
+          s = s.replace(marker, method + marker, 1)
+          p.write_text(s)
+          PY
+      - name: Commit source patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/app/src/main/java/app/auroracall/MainActivity.java
+          git commit -m "Apply Android runtime tablet and push fixes"
+          git push
