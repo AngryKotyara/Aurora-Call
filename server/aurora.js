@@ -3,7 +3,9 @@ const DEFAULT_SUPABASE_PUBLISHABLE_KEY =
   "sb_publishable_ciRXzMnLGCYUm-u-esWIOA_v6XjUEuu";
 
 const SUPABASE_URL = String(
-  process.env.AURORA_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
+  process.env.AURORA_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    DEFAULT_SUPABASE_URL,
 ).replace(/\/+$/, "");
 
 export const SUPABASE_PUBLISHABLE_KEY = String(

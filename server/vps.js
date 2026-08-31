@@ -48,7 +48,8 @@ function decorateResponse(res) {
     return res;
   };
   res.json = (payload) => {
-    if (!res.headersSent) res.setHeader("Content-Type", "application/json; charset=utf-8");
+    if (!res.headersSent)
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.end(JSON.stringify(payload));
     return res;
   };
@@ -64,7 +65,11 @@ function decorateResponse(res) {
 }
 
 async function parseBody(req) {
-  if (!(req.method === "POST" || req.method === "PUT" || req.method === "PATCH")) {
+  if (!(
+    req.method === "POST" ||
+    req.method === "PUT" ||
+    req.method === "PATCH"
+  )) {
     req.body = undefined;
     return;
   }
@@ -72,7 +77,8 @@ async function parseBody(req) {
   const chunks = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) throw Object.assign(new Error("payload_too_large"), { statusCode: 413 });
+    if (size > MAX_BODY_BYTES)
+      throw Object.assign(new Error("payload_too_large"), { statusCode: 413 });
     chunks.push(chunk);
   }
   if (!chunks.length) {
@@ -107,14 +113,18 @@ function safeStaticPath(pathname) {
   }
   const relative = decoded.replace(/^\/+/, "");
   const candidate = path.resolve(DIST, relative || "index.html");
-  return candidate === DIST || candidate.startsWith(`${DIST}${path.sep}`) ? candidate : null;
+  return candidate === DIST || candidate.startsWith(`${DIST}${path.sep}`)
+    ? candidate
+    : null;
 }
 
 async function serveFile(res, filePath, cacheControl) {
   const info = await stat(filePath);
   if (!info.isFile()) return false;
   harden(res);
-  const contentType = MIME.get(path.extname(filePath).toLowerCase()) || "application/octet-stream";
+  const contentType =
+    MIME.get(path.extname(filePath).toLowerCase()) ||
+    "application/octet-stream";
   res.statusCode = 200;
   res.setHeader("Content-Type", contentType);
   res.setHeader("Content-Length", String(info.size));
@@ -146,7 +156,10 @@ async function serveStatic(req, res, pathname) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const url = new URL(
+      req.url || "/",
+      `http://${req.headers.host || "localhost"}`,
+    );
     const pathname = url.pathname;
 
     if (pathname === "/healthz") {
@@ -158,17 +171,26 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (pathname === "/api/auth-login") return void (await runHandler(authLogin, req, res));
-    if (pathname === "/api/auth-logout") return void (await runHandler(authLogout, req, res));
-    if (pathname === "/api/auth-adopt") return void (await runHandler(authAdopt, req, res));
-    if (pathname === "/api/register-email") return void (await runHandler(registerEmail, req, res));
+    if (pathname === "/api/auth-login")
+      return void (await runHandler(authLogin, req, res));
+    if (pathname === "/api/auth-logout")
+      return void (await runHandler(authLogout, req, res));
+    if (pathname === "/api/auth-adopt")
+      return void (await runHandler(authAdopt, req, res));
+    if (pathname === "/api/register-email")
+      return void (await runHandler(registerEmail, req, res));
 
     const rpcMatch = pathname.match(/^\/api\/rpc\/([a-z0-9_]{1,80})$/);
-    if (rpcMatch) return void (await runHandler(rpcProxy, req, res, { name: rpcMatch[1] }));
+    if (rpcMatch)
+      return void (await runHandler(rpcProxy, req, res, { name: rpcMatch[1] }));
 
-    const functionMatch = pathname.match(/^\/api\/functions\/([a-z0-9_-]{1,80})$/);
+    const functionMatch = pathname.match(
+      /^\/api\/functions\/([a-z0-9_-]{1,80})$/,
+    );
     if (functionMatch)
-      return void (await runHandler(functionProxy, req, res, { name: functionMatch[1] }));
+      return void (await runHandler(functionProxy, req, res, {
+        name: functionMatch[1],
+      }));
 
     if (pathname.startsWith("/api/")) {
       decorateResponse(res).status(404).json({ error: "not_found" });
@@ -184,10 +206,20 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const status = Number(error?.statusCode || 500);
-    console.error("aurora_vps_request_failed", error instanceof Error ? error.message : error);
+    console.error(
+      "aurora_vps_request_failed",
+      error instanceof Error ? error.message : error,
+    );
     decorateResponse(res)
       .status(status >= 400 && status <= 599 ? status : 500)
-      .json({ error: status === 413 ? "payload_too_large" : status === 400 ? "invalid_request" : "server_error" });
+      .json({
+        error:
+          status === 413
+            ? "payload_too_large"
+            : status === 400
+              ? "invalid_request"
+              : "server_error",
+      });
   }
 });
 
