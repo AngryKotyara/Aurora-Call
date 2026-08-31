@@ -1,3 +1,10 @@
+import {
+  disableAndroidNotifications,
+  enableAndroidNotifications,
+  isAndroidNativeApp,
+  openAndroidFullScreenSettings,
+  requestAndroidNotificationState,
+} from "./android-native.js";
 import { config } from "./config.js";
 import { setAppBadgeCount } from "./app-badge.js";
 import { PUSH_SUBSCRIPTION_SYNC_MS, pushSyncDue } from "./polling-policy.js";
@@ -8,9 +15,14 @@ const VAPID_PUBLIC_KEY =
   "BMNFI7gc9X-oOOTXoFTRW2oulzz68swL5TOTK5g6EIR_svfw8BHXLG1u3sSMPaj_fxQ2B2XDpPP7jj4qO86chDU";
 const PUSH_DISABLED_KEY = "aurora_push_disabled";
 let syncInFlight = null;
+let nativeSyncInFlight = null;
 let lastSubscriptionSyncAt = 0;
+let lastNativeSyncAt = 0;
+let lastNativeFingerprint = "";
+let nativePushState = null;
 let maintenanceTimer = null;
 let pushObserver = null;
+let initialized = false;
 
 function notificationsOptedOut() {
   try {
@@ -43,7 +55,7 @@ function isStandalone() {
   );
 }
 
-function supported() {
+function webPushSupported() {
   return (
     "serviceWorker" in navigator &&
     "PushManager" in window &&
@@ -51,16 +63,19 @@ function supported() {
   );
 }
 
-async function pushApi(body) {
+async function pushApi(body, { keepalive = false } = {}) {
   if (!state.session?.token) throw new Error("not_authenticated");
   const response = await fetch(`${config.functionsBaseUrl}aurora-push`, {
     method: "POST",
     headers: {
       apikey: config.supabasePublishableKey,
       "Content-Type": "application/json",
-      "X-Client-Info": "aurora-call-web/1",
+      "X-Client-Info": isAndroidNativeApp()
+        ? "aurora-call-android/2"
+        : "aurora-call-web/1",
     },
     body: JSON.stringify(body),
+    keepalive,
   });
   if (!response.ok)
     throw new Error(
@@ -73,9 +88,9 @@ async function getRegistration() {
   return navigator.serviceWorker.ready;
 }
 
-async function ensureSubscription() {
+async function ensureWebSubscription() {
   if (
-    !supported() ||
+    !webPushSupported() ||
     Notification.permission !== "granted" ||
     notificationsOptedOut() ||
     !state.session?.token
@@ -104,8 +119,62 @@ async function ensureSubscription() {
   return syncInFlight;
 }
 
+function nativeFingerprint(pushState = nativePushState) {
+  if (!pushState?.token) return "";
+  return [
+    pushState.token,
+    pushState.installation_id || "",
+    pushState.app_version || "",
+    pushState.device_model || "",
+  ].join("|");
+}
+
+async function ensureNativeSubscription() {
+  if (
+    !isAndroidNativeApp() ||
+    !state.session?.token ||
+    !nativePushState?.enabled ||
+    !nativePushState?.token
+  )
+    return null;
+  if (nativeSyncInFlight) return nativeSyncInFlight;
+
+  const fingerprint = nativeFingerprint();
+  if (
+    fingerprint &&
+    fingerprint === lastNativeFingerprint &&
+    !pushSyncDue(lastNativeSyncAt)
+  )
+    return nativePushState;
+
+  nativeSyncInFlight = pushApi({
+    action: "subscribe_native",
+    device_token: nativePushState.token,
+    installation_id: nativePushState.installation_id || null,
+    app_version: nativePushState.app_version || null,
+    device_model: nativePushState.device_model || null,
+  })
+    .then(() => {
+      lastNativeFingerprint = fingerprint;
+      lastNativeSyncAt = Date.now();
+      return nativePushState;
+    })
+    .finally(() => {
+      nativeSyncInFlight = null;
+    });
+  return nativeSyncInFlight;
+}
+
 async function enableNotifications() {
-  if (!supported()) {
+  if (isAndroidNativeApp()) {
+    if (!enableAndroidNotifications()) {
+      showToast("Не удалось открыть системное разрешение уведомлений");
+      return;
+    }
+    return;
+  }
+
+  if (!webPushSupported()) {
     showToast("Push-уведомления не поддерживаются на этом устройстве");
     return;
   }
@@ -124,7 +193,7 @@ async function enableNotifications() {
   }
   try {
     setNotificationsOptedOut(false);
-    await ensureSubscription();
+    await ensureWebSubscription();
     showToast("Фоновые уведомления включены", true);
   } catch (error) {
     console.error("push subscription failed", error);
@@ -134,7 +203,20 @@ async function enableNotifications() {
 }
 
 async function disableNotifications() {
-  if (!supported()) return;
+  if (isAndroidNativeApp()) {
+    const token = nativePushState?.token;
+    if (token && state.session?.token) {
+      await pushApi({ action: "unsubscribe_native", device_token: token }).catch(
+        () => {},
+      );
+    }
+    lastNativeFingerprint = "";
+    lastNativeSyncAt = 0;
+    disableAndroidNotifications();
+    return;
+  }
+
+  if (!webPushSupported()) return;
   setNotificationsOptedOut(true);
   lastSubscriptionSyncAt = 0;
   try {
@@ -156,13 +238,67 @@ async function disableNotifications() {
   renderPushCard();
 }
 
+function nativeCardCopy() {
+  if (!nativePushState)
+    return {
+      title: "Проверяем уведомления",
+      text: "Android сообщает состояние системных уведомлений.",
+      action: "Проверка…",
+      disabled: true,
+      mode: "wait",
+    };
+  if (!nativePushState.firebase_configured)
+    return {
+      title: "Android push не настроен",
+      text: "Для этой сборки ещё не добавлена конфигурация Firebase Cloud Messaging.",
+      action: "Недоступно",
+      disabled: true,
+      mode: "unavailable",
+    };
+  if (nativePushState.enabled && !nativePushState.full_screen_allowed)
+    return {
+      title: "Фоновые уведомления включены",
+      text: "Сообщения уже будут приходить. Разрешите полноэкранные уведомления, чтобы входящий звонок появлялся поверх экрана блокировки.",
+      action: "Разрешить звонки",
+      disabled: false,
+      enabled: true,
+      mode: "full_screen",
+    };
+  if (nativePushState.enabled)
+    return {
+      title: "Фоновые уведомления включены",
+      text: "Aurora Call сможет сообщать о сообщениях и входящих звонках, даже когда приложение закрыто.",
+      action: "Выключить уведомления",
+      disabled: false,
+      enabled: true,
+      mode: "disable",
+    };
+  if (nativePushState.user_enabled)
+    return {
+      title: "Уведомления заблокированы Android",
+      text: "Системное разрешение не выдано. Нажмите ещё раз, чтобы запросить его.",
+      action: "Разрешить уведомления",
+      disabled: false,
+      mode: "enable",
+    };
+  return {
+    title: "Уведомления о звонках и сообщениях",
+    text: "Получайте системные уведомления Android, даже когда Aurora Call закрыт.",
+    action: "Включить уведомления",
+    disabled: false,
+    mode: "enable",
+  };
+}
+
 function cardCopy() {
-  if (!supported())
+  if (isAndroidNativeApp()) return nativeCardCopy();
+  if (!webPushSupported())
     return {
       title: "Фоновые уведомления недоступны",
       text: "Этот браузер не поддерживает Web Push.",
       action: "Недоступно",
       disabled: true,
+      mode: "unavailable",
     };
   if (!isStandalone() && /iPad|iPhone|iPod/.test(navigator.userAgent))
     return {
@@ -170,13 +306,15 @@ function cardCopy() {
       text: "Добавьте Aurora Call на экран «Домой», затем включите уведомления здесь.",
       action: "Как включить",
       disabled: false,
+      mode: "ios_install",
     };
   if (Notification.permission === "denied")
     return {
       title: "Уведомления заблокированы",
-      text: "Разрешите уведомления для Aurora Call в настройках iPhone, затем откройте приложение снова.",
+      text: "Разрешите уведомления для Aurora Call в настройках устройства, затем откройте приложение снова.",
       action: "Заблокировано",
       disabled: true,
+      mode: "blocked",
     };
   if (Notification.permission === "granted" && !notificationsOptedOut())
     return {
@@ -185,6 +323,7 @@ function cardCopy() {
       action: "Выключить уведомления",
       disabled: false,
       enabled: true,
+      mode: "disable",
     };
   if (Notification.permission === "granted")
     return {
@@ -192,12 +331,14 @@ function cardCopy() {
       text: "Aurora Call не будет отправлять push-уведомления на это устройство.",
       action: "Включить уведомления",
       disabled: false,
+      mode: "enable",
     };
   return {
     title: "Уведомления о звонках и сообщениях",
     text: "Получайте push-уведомления, даже когда Aurora Call закрыт.",
     action: "Включить уведомления",
     disabled: false,
+    mode: "enable",
   };
 }
 
@@ -224,13 +365,21 @@ function renderPushCard() {
   card.classList.toggle("granted", Boolean(copy.enabled));
   card.innerHTML = `<span class="media-access-icon" aria-hidden="true">${copy.enabled ? "✓" : "●"}</span><div class="media-access-copy"><h2>${copy.title}</h2><p class="muted">${copy.text}</p></div><button class="btn ${copy.enabled ? "ghost" : ""}" data-push-toggle ${copy.disabled ? "disabled" : ""}>${copy.action}</button>`;
   card.querySelector("[data-push-toggle]")?.addEventListener("click", () => {
-    if (!isStandalone() && /iPad|iPhone|iPod/.test(navigator.userAgent)) {
+    if (copy.mode === "full_screen") {
+      openAndroidFullScreenSettings();
+      return;
+    }
+    if (copy.mode === "ios_install") {
       showToast(
         "Safari → Поделиться → На экран «Домой», затем откройте Aurora Call с иконки",
       );
       return;
     }
-    void (copy.enabled ? disableNotifications() : enableNotifications());
+    if (copy.mode === "disable") {
+      void disableNotifications();
+      return;
+    }
+    if (copy.mode === "enable") void enableNotifications();
   });
 }
 
@@ -268,17 +417,34 @@ function handlePushLaunch() {
 
 async function runMaintenance() {
   renderPushCard();
+  if (!state.session) return;
+
+  if (isAndroidNativeApp()) {
+    requestAndroidNotificationState();
+    if (
+      nativePushState?.enabled &&
+      nativePushState?.token &&
+      pushSyncDue(lastNativeSyncAt)
+    ) {
+      try {
+        await ensureNativeSubscription();
+      } catch (error) {
+        console.warn("Native push subscription maintenance failed", error);
+      }
+    }
+    return;
+  }
+
   if (
     document.visibilityState === "hidden" ||
-    !supported() ||
+    !webPushSupported() ||
     Notification.permission !== "granted" ||
     notificationsOptedOut() ||
-    !state.session ||
     !pushSyncDue(lastSubscriptionSyncAt)
   )
     return;
   try {
-    await ensureSubscription();
+    await ensureWebSubscription();
   } catch (error) {
     console.warn("Push subscription maintenance failed", error);
   }
@@ -290,13 +456,19 @@ function scheduleMaintenance(delay = 180) {
     async () => {
       maintenanceTimer = null;
       await runMaintenance();
-      if (
-        supported() &&
+      const webNeedsMaintenance =
+        !isAndroidNativeApp() &&
+        webPushSupported() &&
         Notification.permission === "granted" &&
         !notificationsOptedOut() &&
-        state.session
-      ) {
-        const elapsed = Date.now() - lastSubscriptionSyncAt;
+        state.session;
+      const nativeNeedsMaintenance =
+        isAndroidNativeApp() && nativePushState?.user_enabled && state.session;
+      if (webNeedsMaintenance || nativeNeedsMaintenance) {
+        const lastSyncAt = isAndroidNativeApp()
+          ? lastNativeSyncAt
+          : lastSubscriptionSyncAt;
+        const elapsed = Date.now() - lastSyncAt;
         scheduleMaintenance(
           Math.max(5 * 60_000, PUSH_SUBSCRIPTION_SYNC_MS - elapsed),
         );
@@ -306,7 +478,48 @@ function scheduleMaintenance(delay = 180) {
   );
 }
 
+export async function detachPushSubscriptions() {
+  if (!state.session?.token) return;
+  if (isAndroidNativeApp()) {
+    const token = nativePushState?.token;
+    if (token) {
+      await pushApi(
+        { action: "unsubscribe_native", device_token: token },
+        { keepalive: true },
+      ).catch(() => {});
+    }
+    lastNativeFingerprint = "";
+    lastNativeSyncAt = 0;
+    return;
+  }
+  if (!webPushSupported()) return;
+  try {
+    const registration = await getRegistration();
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription)
+      await pushApi(
+        { action: "unsubscribe", endpoint: subscription.endpoint },
+        { keepalive: true },
+      ).catch(() => {});
+  } catch {
+    // Logging out must still succeed if notification cleanup is unavailable.
+  }
+}
+
 export function initPushNotifications() {
+  if (initialized) return;
+  initialized = true;
+
+  document.addEventListener("aurora-native-push-state", (event) => {
+    nativePushState = event.detail || null;
+    renderPushCard();
+    if (nativePushState?.enabled && nativePushState?.token && state.session)
+      void ensureNativeSubscription().catch((error) =>
+        console.warn("Native push subscription failed", error),
+      );
+  });
+
+  if (isAndroidNativeApp()) requestAndroidNotificationState();
   scheduleMaintenance(0);
   const root = document.getElementById("root");
   if (root && !pushObserver) {
