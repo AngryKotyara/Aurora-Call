@@ -1,0 +1,1 @@
+Aurora Call Android 1.3.0 self-host-ready build trigger.
