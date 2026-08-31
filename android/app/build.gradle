@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
+def generatedAuroraIconResDir = file("$buildDir/generated/aurora-icon-res")
+
 android {
     namespace 'app.auroracall'
     compileSdk 36
@@ -12,6 +14,12 @@ android {
         targetSdk 36
         versionCode 1
         versionName '1.0.0'
+    }
+
+    sourceSets {
+        main {
+            res.srcDir generatedAuroraIconResDir
+        }
     }
 
     buildTypes {
@@ -30,6 +38,16 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
+
+tasks.register('generateAuroraIcon', Copy) {
+    from file('../../public/aurora-call-icon-512-v2.png')
+    into file("$generatedAuroraIconResDir/drawable")
+    rename { 'aurora_call_icon.png' }
+}
+
+tasks.matching { it.name == 'preBuild' }.configureEach {
+    dependsOn tasks.named('generateAuroraIcon')
 }
 
 dependencies {
