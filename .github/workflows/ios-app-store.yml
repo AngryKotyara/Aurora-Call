@@ -139,7 +139,7 @@ jobs:
           ls -la "$RUNNER_TEMP/export"
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: AuroraCall-AppStore
           path: ${{ runner.temp }}/export/*.ipa
@@ -171,7 +171,7 @@ jobs:
 
       - name: Upload archive log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-app-store-archive-log
           path: ios-archive.log
