@@ -7,6 +7,17 @@ AURORA_INFRA_DIR="${AURORA_INFRA_DIR:-/opt/aurora-call-infra}"
 TURN_RELAY_MIN_PORT="${TURN_RELAY_MIN_PORT:-49160}"
 TURN_RELAY_MAX_PORT="${TURN_RELAY_MAX_PORT:-49260}"
 
+if [[ -n "${AURORA_SECRETS_FILE:-}" ]]; then
+  if [[ ! -r "${AURORA_SECRETS_FILE}" ]]; then
+    echo "Cannot read AURORA_SECRETS_FILE: ${AURORA_SECRETS_FILE}" >&2
+    exit 2
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  source "${AURORA_SECRETS_FILE}"
+  set +a
+fi
+
 require() {
   local name="$1"
   if [[ -z "${!name:-}" ]]; then
@@ -30,7 +41,7 @@ if [[ ${#NTFY_DISTRIBUTOR_PASSWORD} -lt 16 ]]; then
 fi
 
 if [[ "${EUID}" -ne 0 ]]; then
-  echo "Run this script as root (or with sudo -E)." >&2
+  echo "Run this script as root." >&2
   exit 2
 fi
 
