@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -11,7 +12,6 @@ import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.CookieManager;
-import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
@@ -21,21 +21,26 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.webkit.WebMessageCompat;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 public final class MainActivity extends Activity implements ScreenShareService.Listener {
     private static final String WEB_URL = "https://aurora-call.vercel.app";
+    private static final String TRUSTED_ORIGIN = "https://aurora-call.vercel.app";
     private static final String TRUSTED_HOST = "aurora-call.vercel.app";
     private static final int REQUEST_WEB_MEDIA = 2101;
     private static final int REQUEST_FILE_CHOOSER = 2102;
     private static final int REQUEST_SCREEN_CAPTURE = 2103;
 
-    private final String bridgeToken = UUID.randomUUID().toString();
     private WebView webView;
+    private boolean nativeBridgeAvailable;
     private PermissionRequest pendingWebPermission;
     private String[] pendingWebResources;
     private ValueCallback<Uri[]> pendingFileCallback;
@@ -76,8 +81,29 @@ public final class MainActivity extends Activity implements ScreenShareService.L
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
 
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
-        webView.addJavascriptInterface(new ScreenShareBridge(), "AuroraScreenShare");
+        boolean debuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        WebView.setWebContentsDebuggingEnabled(debuggable);
+
+        nativeBridgeAvailable = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER);
+        if (nativeBridgeAvailable) {
+            WebViewCompat.addWebMessageListener(
+                    webView,
+                    "AuroraScreenShare",
+                    Collections.singleton(TRUSTED_ORIGIN),
+                    (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
+                        if (!isMainFrame || !isTrustedUri(sourceOrigin)) return;
+                        if (message.getType() != WebMessageCompat.TYPE_STRING) return;
+                        String action = message.getData();
+                        if ("start".equals(action)) {
+                            beginScreenCapture();
+                        } else if ("stop".equals(action)) {
+                            runOnUiThread(() -> {
+                                if (isTrustedCurrentPage()) stopScreenCapture();
+                            });
+                        }
+                    }
+            );
+        }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -105,7 +131,9 @@ public final class MainActivity extends Activity implements ScreenShareService.L
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (isTrustedUri(Uri.parse(url))) injectAndroidScreenShareBridge();
+                if (nativeBridgeAvailable && isTrustedUri(Uri.parse(url))) {
+                    injectAndroidScreenShareBridge();
+                }
             }
         });
 
@@ -300,12 +328,11 @@ public final class MainActivity extends Activity implements ScreenShareService.L
         String script = "(() => {\n"
                 + "  if (window.__auroraAndroidBridgeInstalled) return;\n"
                 + "  const nativeBridge = window.AuroraScreenShare;\n"
-                + "  const bridgeToken = " + JSONObject.quote(bridgeToken) + ";\n"
-                + "  if (!nativeBridge || !navigator.mediaDevices || !HTMLCanvasElement.prototype.captureStream) return;\n"
+                + "  if (!nativeBridge?.postMessage || !navigator.mediaDevices || !HTMLCanvasElement.prototype.captureStream) return;\n"
                 + "  let canvas = null, context = null, stream = null, rawStop = null, firstResolve = null, firstReject = null, firstTimer = null, stopping = false;\n"
                 + "  const clearWait = () => { if (firstTimer) clearTimeout(firstTimer); firstTimer = null; firstResolve = null; firstReject = null; };\n"
                 + "  const destroy = (notifyNative) => {\n"
-                + "    if (notifyNative) { try { nativeBridge.stop(bridgeToken); } catch {} }\n"
+                + "    if (notifyNative) { try { nativeBridge.postMessage('stop'); } catch {} }\n"
                 + "    clearWait();\n"
                 + "    if (rawStop && stream?.getVideoTracks?.()[0]?.readyState !== 'ended') { try { rawStop(); } catch {} }\n"
                 + "    stream = null; rawStop = null; stopping = false; canvas?.remove(); canvas = null; context = null;\n"
@@ -316,7 +343,7 @@ public final class MainActivity extends Activity implements ScreenShareService.L
                 + "    context = canvas.getContext('2d', { alpha: false }); stream = canvas.captureStream(8);\n"
                 + "    const track = stream.getVideoTracks()[0]; if (!track) throw new Error('Android screen track unavailable');\n"
                 + "    rawStop = track.stop.bind(track);\n"
-                + "    track.stop = () => { if (stopping) return; stopping = true; try { nativeBridge.stop(bridgeToken); } catch {} try { rawStop(); } catch {} };\n"
+                + "    track.stop = () => { if (stopping) return; stopping = true; try { nativeBridge.postMessage('stop'); } catch {} try { rawStop(); } catch {} };\n"
                 + "    const firstFrame = new Promise((resolve, reject) => { firstResolve = resolve; firstReject = reject; firstTimer = setTimeout(() => { reject(new Error('Android screen capture did not start')); destroy(true); }, 20000); });\n"
                 + "    window.__auroraReceiveScreenFrame = (base64, width, height) => {\n"
                 + "      if (!canvas || !context || !base64) return;\n"
@@ -339,7 +366,7 @@ public final class MainActivity extends Activity implements ScreenShareService.L
                 + "        destroy(false);\n"
                 + "      }\n"
                 + "    };\n"
-                + "    nativeBridge.start(bridgeToken); await firstFrame; try { track.contentHint = 'detail'; } catch {} return stream;\n"
+                + "    nativeBridge.postMessage('start'); await firstFrame; try { track.contentHint = 'detail'; } catch {} return stream;\n"
                 + "  };\n"
                 + "  try { Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: startNative }); } catch { navigator.mediaDevices.getDisplayMedia = startNative; }\n"
                 + "  window.__auroraAndroidBridgeInstalled = true;\n"
@@ -409,7 +436,6 @@ public final class MainActivity extends Activity implements ScreenShareService.L
         pendingWebResources = null;
 
         if (webView != null) {
-            webView.removeJavascriptInterface("AuroraScreenShare");
             webView.stopLoading();
             webView.setWebChromeClient(null);
             webView.setWebViewClient(null);
@@ -417,21 +443,5 @@ public final class MainActivity extends Activity implements ScreenShareService.L
             webView = null;
         }
         super.onDestroy();
-    }
-
-    private final class ScreenShareBridge {
-        @JavascriptInterface
-        public void start(String token) {
-            if (!bridgeToken.equals(token)) return;
-            beginScreenCapture();
-        }
-
-        @JavascriptInterface
-        public void stop(String token) {
-            if (!bridgeToken.equals(token)) return;
-            runOnUiThread(() -> {
-                if (isTrustedCurrentPage()) stopScreenCapture();
-            });
-        }
     }
 }
