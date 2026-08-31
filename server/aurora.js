@@ -1,6 +1,16 @@
-const SUPABASE_URL = "https://taqpirplpmjihmkztwlv.supabase.co";
-export const SUPABASE_PUBLISHABLE_KEY =
+const DEFAULT_SUPABASE_URL = "https://taqpirplpmjihmkztwlv.supabase.co";
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY =
   "sb_publishable_ciRXzMnLGCYUm-u-esWIOA_v6XjUEuu";
+
+const SUPABASE_URL = String(
+  process.env.AURORA_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
+).replace(/\/+$/, "");
+
+export const SUPABASE_PUBLISHABLE_KEY = String(
+  process.env.AURORA_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+);
 export const SESSION_COOKIE = "__Host-aurora_session";
 
 export function parseCookies(header = "") {
@@ -78,7 +88,7 @@ export async function supabaseRpc(name, body) {
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       "Content-Type": "application/json",
-      "X-Client-Info": "aurora-call-server/1",
+      "X-Client-Info": "aurora-call-server/2",
     },
     body: JSON.stringify(body),
   });
@@ -90,7 +100,7 @@ export async function supabaseFunction(name, body, extraHeaders = {}) {
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       "Content-Type": "application/json",
-      "X-Client-Info": "aurora-call-server/1",
+      "X-Client-Info": "aurora-call-server/2",
       ...extraHeaders,
     },
     body: JSON.stringify(body),
