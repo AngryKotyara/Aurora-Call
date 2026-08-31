@@ -248,13 +248,34 @@ function nativeCardCopy() {
       disabled: true,
       mode: "wait",
     };
-  if (!nativePushState.firebase_configured)
+  if (!nativePushState.distributor_available)
     return {
-      title: "Android push не настроен",
-      text: "Для этой сборки ещё не добавлена конфигурация Firebase Cloud Messaging.",
-      action: "Недоступно",
-      disabled: true,
-      mode: "unavailable",
+      title: "Нужен сервис доставки уведомлений",
+      text: "Aurora Call работает без Google через UnifiedPush. Установите ntfy или Sunup, затем вернитесь в Aurora Call.",
+      action: "Установить ntfy",
+      disabled: false,
+      mode: "unifiedpush_help",
+    };
+  if (
+    nativePushState.registration_error === "temporary_unavailable" ||
+    nativePushState.registration_error === "network"
+  )
+    return {
+      title: "Сервис уведомлений временно недоступен",
+      text: "Проверьте сеть и повторите подключение UnifiedPush.",
+      action: "Повторить",
+      disabled: false,
+      mode: "enable",
+    };
+  if (nativePushState.user_enabled && !nativePushState.registered)
+    return {
+      title: "Подключите сервис уведомлений",
+      text: nativePushState.distributor_selected
+        ? "Android ещё не выдал push-endpoint. Повторите регистрацию."
+        : "Выберите установленный UnifiedPush-сервис для Aurora Call.",
+      action: "Подключить",
+      disabled: false,
+      mode: "enable",
     };
   if (nativePushState.enabled && !nativePushState.full_screen_allowed)
     return {
@@ -277,14 +298,14 @@ function nativeCardCopy() {
   if (nativePushState.user_enabled)
     return {
       title: "Уведомления заблокированы Android",
-      text: "Системное разрешение не выдано. Нажмите ещё раз, чтобы запросить его.",
+      text: "Системное разрешение не выдано. Разрешите уведомления для Aurora Call и повторите подключение.",
       action: "Разрешить уведомления",
       disabled: false,
       mode: "enable",
     };
   return {
     title: "Уведомления о звонках и сообщениях",
-    text: "Получайте системные уведомления Android, даже когда Aurora Call закрыт.",
+    text: "Получайте системные уведомления Android без Firebase через UnifiedPush.",
     action: "Включить уведомления",
     disabled: false,
     mode: "enable",
@@ -368,6 +389,10 @@ function renderPushCard() {
   card.querySelector("[data-push-toggle]")?.addEventListener("click", () => {
     if (copy.mode === "full_screen") {
       openAndroidFullScreenSettings();
+      return;
+    }
+    if (copy.mode === "unifiedpush_help") {
+      location.href = "https://unifiedpush.org/users/distributors/ntfy/";
       return;
     }
     if (copy.mode === "ios_install") {

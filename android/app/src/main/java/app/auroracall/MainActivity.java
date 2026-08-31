@@ -83,7 +83,7 @@ public final class MainActivity extends Activity implements ScreenShareService.L
         settings.setAllowContentAccess(true);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " AuroraCallAndroid/1.3");
+        settings.setUserAgentString(settings.getUserAgentString() + " AuroraCallAndroid/1.3.1");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);

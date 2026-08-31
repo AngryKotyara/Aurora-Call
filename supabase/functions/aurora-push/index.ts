@@ -271,7 +271,7 @@ async function sendNativeToUser(
             keys: { p256dh: device.p256dh, auth: device.auth },
           },
           JSON.stringify(data),
-          { TTL: ttl },
+          { TTL: ttl, headers: { "X-UnifiedPush": "1" } },
         );
         delivered += 1;
       } catch (error: any) {
