@@ -36,15 +36,24 @@ const db = createClient(supabaseUrl, serviceRole, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-async function currentUser(token: string | null) {
+type AuroraSession = {
+  userId: string;
+  expiresAt: string;
+};
+
+async function currentSession(token: string | null): Promise<AuroraSession | null> {
   if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return null;
   const { data } = await db
     .from("call_sessions")
-    .select("user_id")
+    .select("user_id,expires_at")
     .eq("token", token)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
-  return data?.user_id ?? null;
+  if (!data?.user_id || !data?.expires_at) return null;
+  return {
+    userId: String(data.user_id),
+    expiresAt: String(data.expires_at),
+  };
 }
 
 async function limit(userId: string, action: string, count: number) {
@@ -99,7 +108,10 @@ async function firebaseServiceAccount(): Promise<FirebaseServiceAccount | null> 
 function base64UrlBytes(bytes: Uint8Array) {
   let binary = "";
   for (const value of bytes) binary += String.fromCharCode(value);
-  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  return btoa(binary)
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 }
 
 function base64UrlText(value: string) {
@@ -281,7 +293,8 @@ async function sendNativeToUser(
     .from("aurora_native_devices")
     .select("id,device_token")
     .eq("user_id", userId)
-    .eq("platform", "android");
+    .eq("platform", "android")
+    .gt("session_expires_at", new Date().toISOString());
   if (error) throw error;
   if (!devices?.length) return 0;
 
@@ -389,8 +402,9 @@ Deno.serve(async (req: Request) => {
     )
       return json(req, { error: "unknown_action" }, 400);
 
-    const userId = await currentUser(body?.p_token || null);
-    if (!userId) return json(req, { error: "unauthorized" }, 401);
+    const session = await currentSession(body?.p_token || null);
+    if (!session) return json(req, { error: "unauthorized" }, 401);
+    const userId = session.userId;
 
     await limit(userId, action, action.startsWith("notify_") ? 240 : 30);
 
@@ -438,9 +452,11 @@ Deno.serve(async (req: Request) => {
           user_id: userId,
           platform: "android",
           device_token: deviceToken,
-          installation_id: String(body.installation_id || "").slice(0, 200) || null,
+          installation_id:
+            String(body.installation_id || "").slice(0, 200) || null,
           app_version: String(body.app_version || "").slice(0, 80) || null,
           device_model: String(body.device_model || "").slice(0, 200) || null,
+          session_expires_at: session.expiresAt,
           updated_at: new Date().toISOString(),
           last_seen_at: new Date().toISOString(),
         },
@@ -521,7 +537,8 @@ Deno.serve(async (req: Request) => {
         .or(`caller_id.eq.${userId},callee_id.eq.${userId}`)
         .maybeSingle();
       if (!call) return json(req, { error: "call_not_found" }, 404);
-      const recipientId = call.caller_id === userId ? call.callee_id : call.caller_id;
+      const recipientId =
+        call.caller_id === userId ? call.callee_id : call.caller_id;
       const nativeData: NotificationData = {
         type: "call_end",
         url: "/",
