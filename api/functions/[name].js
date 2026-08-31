@@ -7,7 +7,7 @@ import {
   supabaseFunction,
 } from "../../server/aurora.js";
 
-const ALLOWED = new Set(["aurora-push", "aurora-chat-media"]);
+const ALLOWED = new Set(["aurora-push", "aurora-apns", "aurora-chat-media"]);
 
 export default async function handler(req, res) {
   noStore(res);
