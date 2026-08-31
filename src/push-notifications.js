@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { setAppBadgeCount } from "./app-badge.js";
 import { PUSH_SUBSCRIPTION_SYNC_MS, pushSyncDue } from "./polling-policy.js";
 import { state } from "./state.js";
 import { showToast } from "./utils.js";
@@ -59,7 +60,7 @@ async function pushApi(body) {
       "Content-Type": "application/json",
       "X-Client-Info": "aurora-call-web/1",
     },
-    body: JSON.stringify({ ...body, p_token: state.session.token }),
+    body: JSON.stringify(body),
   });
   if (!response.ok)
     throw new Error(
@@ -146,6 +147,7 @@ async function disableNotifications() {
       }).catch(() => {});
       await subscription.unsubscribe();
     }
+    await setAppBadgeCount(0);
     showToast("Фоновые уведомления выключены", true);
   } catch (error) {
     console.error("push unsubscribe failed", error);
@@ -244,6 +246,15 @@ function handlePushLaunch() {
           detail: { id: friendId, name: friendName },
         }),
       );
+  }
+  if (type === "call") {
+    const callId = params.get("call_id");
+    if (callId) {
+      document.dispatchEvent(
+        new CustomEvent("aurora-call-open", { detail: { callId } }),
+      );
+      return;
+    }
   }
   if (type) {
     params.delete("push");

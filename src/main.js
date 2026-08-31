@@ -34,7 +34,7 @@ syncPageActivity();
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", async () => {
     try {
-      await window.navigator.serviceWorker.register("/sw.js?v=20260830-media1");
+      await window.navigator.serviceWorker.register("/sw.js?v=20260831-push2");
       initPushNotifications();
     } catch (error) {
       console.warn("Service worker unavailable", error);

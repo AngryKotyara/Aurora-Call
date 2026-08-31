@@ -2,6 +2,7 @@
   "name": "Aurora Call",
   "short_name": "Aurora Call",
   "description": "Аудио- и видеозвонки, сообщения и уведомления Aurora Call.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

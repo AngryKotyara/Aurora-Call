@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { setAppBadgeCount } from "./app-badge.js";
 
 function readStoredSession() {
   try {
@@ -60,6 +61,7 @@ export function clearSession() {
   state.selectedFriend = null;
   state.lastSignalId = 0;
   localStorage.removeItem(config.sessionStorageKey);
+  void setAppBadgeCount(0);
   void fetch("/api/auth-logout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

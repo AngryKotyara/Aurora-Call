@@ -63,12 +63,21 @@ test("PWA and viewport metadata allow rotation, safe areas, and user zoom", () =
   );
 
   assert.equal(manifest.orientation, "any");
+  assert.equal(manifest.id, "/");
   assert.equal(manifest.icons[0].src, "/aurora-call-logo.png");
   assert.equal(manifest.icons[0].sizes, "1254x1254");
   assert.equal(icon.readUInt32BE(16), 1254);
   assert.equal(icon.readUInt32BE(20), 1254);
-  assert.match(serviceWorker, /icon: "\/aurora-call-logo\.png"/);
-  assert.match(serviceWorker, /badge: "\/aurora-call-logo\.png"/);
+  assert.match(
+    serviceWorker,
+    /icon: notification\.icon \|\| "\/aurora-call-logo\.png"/,
+  );
+  assert.match(
+    serviceWorker,
+    /badge: notification\.badge \|\| "\/aurora-call-logo\.png"/,
+  );
+  assert.match(serviceWorker, /payload\.notification \|\| payload/);
+  assert.match(serviceWorker, /notification\.app_badge/);
   assert.match(html, /viewport-fit=cover/);
   assert.match(html, /href="\/aurora-call-logo\.png"/);
   assert.doesNotMatch(html, /user-scalable=no/);

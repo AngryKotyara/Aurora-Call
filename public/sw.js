@@ -1,4 +1,4 @@
-const CACHE = "aurora-shell-v6";
+const CACHE = "aurora-shell-v7";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -80,22 +80,33 @@ self.addEventListener("push", (event) => {
       body: event.data?.text() || "Новое событие",
     };
   }
-  const title = payload.title || "Aurora Call";
+  const notification = payload.notification || payload;
+  const notificationData = notification.data || payload;
+  const title = notification.title || "Aurora Call";
   const options = {
-    body: payload.body || "Новое событие",
-    tag: payload.tag || `aurora-${Date.now()}`,
-    renotify: payload.type === "call",
-    requireInteraction: payload.type === "call",
-    icon: "/aurora-call-logo.png",
-    badge: "/aurora-call-logo.png",
+    body: notification.body || "Новое событие",
+    tag: notification.tag || `aurora-${Date.now()}`,
+    renotify: notificationData.type === "call",
+    requireInteraction: notificationData.type === "call",
+    icon: notification.icon || "/aurora-call-logo.png",
+    badge: notification.badge || "/aurora-call-logo.png",
     data: {
-      url: payload.url || "/",
-      type: payload.type || "generic",
-      call_id: payload.call_id || null,
-      friend_id: payload.friend_id || null,
+      url: notification.navigate || notificationData.url || "/",
+      type: notificationData.type || "generic",
+      call_id: notificationData.call_id || null,
+      friend_id: notificationData.friend_id || null,
     },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  const tasks = [self.registration.showNotification(title, options)];
+  const appBadge = Number(notification.app_badge);
+  if (Number.isFinite(appBadge) && appBadge >= 0) {
+    const badgeTask =
+      appBadge > 0
+        ? self.navigator?.setAppBadge?.(appBadge)
+        : self.navigator?.clearAppBadge?.();
+    if (badgeTask) tasks.push(Promise.resolve(badgeTask).catch(() => {}));
+  }
+  event.waitUntil(Promise.all(tasks));
 });
 
 self.addEventListener("notificationclick", (event) => {

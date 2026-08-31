@@ -35,6 +35,16 @@ test("same-origin RPC proxy injects the cookie token and blocks legacy login", (
   assert.match(proxy, /sameOriginRequest\(req\)/);
 });
 
+test("push proxy injects the HttpOnly session instead of trusting the browser", () => {
+  const proxy = source("api/functions/[name].js");
+  const client = source("src/push-notifications.js");
+
+  assert.match(proxy, /readSessionToken\(req\)/);
+  assert.match(proxy, /p_token: token/);
+  assert.match(proxy, /sameOriginRequest\(req\)/);
+  assert.doesNotMatch(client, /p_token:\s*state\.session\.token/);
+});
+
 test("an expired HttpOnly session returns to login instead of empty data", () => {
   const api = source("src/api.js");
   const app = source("src/app.js");

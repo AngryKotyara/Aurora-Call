@@ -161,7 +161,7 @@ class PeerConnectionMock {
 
 globalThis.RTCPeerConnection = PeerConnectionMock;
 
-const { hangupCall, pollSignalsOnce, startCall } =
+const { hangupCall, openIncomingCallFromPush, pollSignalsOnce, startCall } =
   await import("../src/calls.js");
 const { state } = await import("../src/state.js");
 
@@ -334,4 +334,27 @@ test("a remote hangup dismisses an unanswered incoming call", async () => {
   assert.equal(state.callId, null);
   incomingCalls = [];
   polledSignals = [];
+});
+
+test("a call push opens the matching active incoming call", async () => {
+  const callId = "00000000-0000-4000-8000-0000000000c4";
+  state.session = { token: "receiver-token", username: "volna_preview" };
+  incomingCalls = [
+    {
+      id: callId,
+      from_id: "00000000-0000-4000-8000-0000000000e5",
+      from_name: "aurora_preview",
+      mode: "video",
+    },
+  ];
+
+  assert.equal(await openIncomingCallFromPush(callId), true);
+  assert.equal(
+    document.querySelector("#incoming-call-layer")?.dataset.callId,
+    callId,
+  );
+
+  document.querySelector("[data-incoming-decline]").click();
+  await new Promise((resolve) => setImmediate(resolve));
+  incomingCalls = [];
 });

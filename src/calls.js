@@ -23,6 +23,8 @@ let removeScreenEndedListener = () => {};
 let signalPollInFlight = false;
 let signalPollTimer = null;
 let signalPollingStarted = false;
+let callPushListenerInstalled = false;
+let pushedCallInFlight = null;
 const pendingSignals = new Map();
 const MAX_PENDING_CALLS = 20;
 const MAX_SIGNALS_PER_CALL = 100;
@@ -353,6 +355,52 @@ async function declineIncoming(call) {
   }).catch(() => {});
 }
 
+function presentIncomingCall(call) {
+  return showIncomingCall(call, {
+    onAccept: acceptIncoming,
+    onDecline: declineIncoming,
+  });
+}
+
+function clearCallPushUrl(callId) {
+  if (typeof location === "undefined" || typeof history === "undefined") return;
+  const params = new URLSearchParams(location.search);
+  if (params.get("push") !== "call") return;
+  if (callId && params.get("call_id") !== String(callId)) return;
+  params.delete("push");
+  params.delete("call_id");
+  const next = `${location.pathname}${params.toString() ? `?${params}` : ""}${location.hash}`;
+  history.replaceState(null, "", next);
+}
+
+export async function openIncomingCallFromPush(callId) {
+  const normalizedId = String(callId || "");
+  if (!state.session || !normalizedId) return false;
+  if (pushedCallInFlight === normalizedId) return false;
+  pushedCallInFlight = normalizedId;
+  try {
+    const incoming = await rpc("poll_incoming_calls", {
+      p_token: state.session.token,
+    });
+    const call = (incoming || []).find(
+      (candidate) => String(candidate.id) === normalizedId,
+    );
+    if (!call) {
+      showToast("Звонок уже завершён");
+      return false;
+    }
+    void presentIncomingCall(call);
+    scheduleSignalPoll(0);
+    return true;
+  } catch (error) {
+    console.warn("Failed to open pushed call", error);
+    return false;
+  } finally {
+    clearCallPushUrl(normalizedId);
+    pushedCallInFlight = null;
+  }
+}
+
 function queueSignal(signal) {
   if (!signal?.call_id) return;
   const queue = pendingSignals.get(signal.call_id) || [];
@@ -430,10 +478,7 @@ export async function pollSignalsOnce() {
       p_token: state.session.token,
     });
     for (const call of incoming || []) {
-      void showIncomingCall(call, {
-        onAccept: acceptIncoming,
-        onDecline: declineIncoming,
-      });
+      void presentIncomingCall(call);
     }
 
     const signals = await rpc("poll_call_signals", {
@@ -478,6 +523,16 @@ function scheduleSignalPoll(delay) {
 export function startSignalPolling() {
   if (signalPollingStarted) return;
   signalPollingStarted = true;
+  if (!callPushListenerInstalled) {
+    callPushListenerInstalled = true;
+    document.addEventListener(
+      "aurora-call-open",
+      (event) => void openIncomingCallFromPush(event.detail?.callId),
+    );
+  }
+  const launchParams = new URLSearchParams(location.search);
+  if (launchParams.get("push") === "call")
+    void openIncomingCallFromPush(launchParams.get("call_id"));
   document.addEventListener("visibilitychange", () =>
     scheduleSignalPoll(document.visibilityState === "hidden" ? undefined : 0),
   );

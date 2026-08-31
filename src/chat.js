@@ -1,4 +1,5 @@
 import { rpc } from "./api.js";
+import { setAppBadgeCount } from "./app-badge.js";
 import {
   LEGACY_MEDIA_FRAME_SELECTOR,
   mediaRoutingAttribute,
@@ -493,6 +494,8 @@ async function renderConversation() {
   closeMessageMenu();
   editingMessage = null;
   const messages = await loadMessages();
+  hasThreadCache = false;
+  scheduleBadgeRefresh(0);
   currentMessages = new Map(
     messages.map((message) => [String(message.id), message]),
   );
@@ -700,6 +703,7 @@ async function refreshBadge() {
       badge.hidden = !total;
       badge.textContent = total > 99 ? "99+" : String(total);
     }
+    void setAppBadgeCount(total);
 
     const activeThread = openedFriend
       ? threads.find((thread) => thread.friend_id === openedFriend.id)
