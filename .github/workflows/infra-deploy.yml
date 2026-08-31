@@ -1,0 +1,98 @@
+name: Deploy self-hosted infrastructure
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment secrets
+        env:
+          VPS_HOST: ${{ secrets.AURORA_VPS_HOST }}
+          VPS_USER: ${{ secrets.AURORA_VPS_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.AURORA_VPS_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.AURORA_VPS_KNOWN_HOSTS }}
+          TURN_SHARED_SECRET: ${{ secrets.AURORA_TURN_SHARED_SECRET }}
+          NTFY_PASSWORD: ${{ secrets.AURORA_NTFY_DISTRIBUTOR_PASSWORD }}
+          CERTBOT_EMAIL: ${{ secrets.AURORA_CERTBOT_EMAIL }}
+        run: |
+          test -n "$VPS_HOST" || { echo "Missing AURORA_VPS_HOST"; exit 1; }
+          test -n "$VPS_USER" || { echo "Missing AURORA_VPS_USER"; exit 1; }
+          test -n "$SSH_PRIVATE_KEY" || { echo "Missing AURORA_VPS_SSH_KEY"; exit 1; }
+          test -n "$SSH_KNOWN_HOSTS" || { echo "Missing AURORA_VPS_KNOWN_HOSTS"; exit 1; }
+          test ${#TURN_SHARED_SECRET} -ge 32 || { echo "AURORA_TURN_SHARED_SECRET is too short"; exit 1; }
+          test ${#NTFY_PASSWORD} -ge 16 || { echo "AURORA_NTFY_DISTRIBUTOR_PASSWORD is too short"; exit 1; }
+          test -n "$CERTBOT_EMAIL" || { echo "Missing AURORA_CERTBOT_EMAIL"; exit 1; }
+
+      - name: Configure pinned SSH host identity
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.AURORA_VPS_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.AURORA_VPS_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_aurora"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+      - name: Build protected deployment bundle
+        env:
+          TURN_SHARED_SECRET: ${{ secrets.AURORA_TURN_SHARED_SECRET }}
+          NTFY_PASSWORD: ${{ secrets.AURORA_NTFY_DISTRIBUTOR_PASSWORD }}
+          CERTBOT_EMAIL: ${{ secrets.AURORA_CERTBOT_EMAIL }}
+          TURN_EXTERNAL_IP: ${{ secrets.AURORA_TURN_EXTERNAL_IP }}
+        run: |
+          tar -czf "$RUNNER_TEMP/aurora-infra.tgz" infra
+          umask 077
+          {
+            printf 'TURN_SHARED_SECRET=%q\n' "$TURN_SHARED_SECRET"
+            printf 'NTFY_DISTRIBUTOR_PASSWORD=%q\n' "$NTFY_PASSWORD"
+            printf 'CERTBOT_EMAIL=%q\n' "$CERTBOT_EMAIL"
+            if test -n "$TURN_EXTERNAL_IP"; then
+              printf 'TURN_EXTERNAL_IP=%q\n' "$TURN_EXTERNAL_IP"
+            fi
+          } > "$RUNNER_TEMP/aurora-infra-secrets.env"
+
+      - name: Upload and bootstrap VPS
+        env:
+          VPS_HOST: ${{ secrets.AURORA_VPS_HOST }}
+          VPS_USER: ${{ secrets.AURORA_VPS_USER }}
+        run: |
+          SSH=(ssh -i "$HOME/.ssh/id_aurora" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -i "$HOME/.ssh/id_aurora" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+
+          "${SCP[@]}" \
+            "$RUNNER_TEMP/aurora-infra.tgz" \
+            "$RUNNER_TEMP/aurora-infra-secrets.env" \
+            "$VPS_USER@$VPS_HOST:/tmp/"
+
+          "${SSH[@]}" "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          trap 'rm -rf /tmp/aurora-deploy /tmp/aurora-infra.tgz /tmp/aurora-infra-secrets.env' EXIT
+          rm -rf /tmp/aurora-deploy
+          mkdir -p /tmp/aurora-deploy
+          tar -xzf /tmp/aurora-infra.tgz -C /tmp/aurora-deploy
+          chmod 0600 /tmp/aurora-infra-secrets.env
+          sudo AURORA_SECRETS_FILE=/tmp/aurora-infra-secrets.env \
+            bash /tmp/aurora-deploy/infra/bootstrap-ubuntu24.sh
+          REMOTE
+
+      - name: Verify public push endpoint
+        run: curl --fail --silent --show-error https://push.auroracall.net/v1/health
+
+      - name: Verify TURN TLS certificate
+        run: |
+          timeout 15 openssl s_client \
+            -connect turn.auroracall.net:5349 \
+            -servername turn.auroracall.net \
+            -verify_return_error \
+            </dev/null 2>&1 | grep -q "Verify return code: 0 (ok)"
