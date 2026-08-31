@@ -21,7 +21,7 @@ import "./chat-presence.css";
 import { initChatPresence } from "./chat-presence.js?v=20260831-presence1";
 import "./interaction-polish.js";
 import "./permission-check-animation.js?v=20260815-permissions2";
-import { initPushNotifications } from "./push-notifications.js?v=20260830-perf1";
+import { initPushNotifications } from "./push-notifications.js?v=20260831-android1";
 
 function syncPageActivity() {
   document.documentElement.classList.toggle(
@@ -33,12 +33,12 @@ function syncPageActivity() {
 document.addEventListener("visibilitychange", syncPageActivity);
 syncPageActivity();
 initChatPresence();
+initPushNotifications();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", async () => {
     try {
       await window.navigator.serviceWorker.register("/sw.js?v=20260831-push2");
-      initPushNotifications();
     } catch (error) {
       console.warn("Service worker unavailable", error);
     }
