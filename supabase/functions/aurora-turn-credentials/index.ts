@@ -7,10 +7,8 @@ const DEFAULT_TURNS_PORT = 5349;
 const CREDENTIAL_TTL_SECONDS = 10 * 60;
 
 function allowedOrigin(origin: string) {
-  return (
-    origin === PROD_ORIGIN ||
-    /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)
-  );
+  if (origin === PROD_ORIGIN) return true;
+  return /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
 }
 
 function headers(req: Request) {
@@ -26,8 +24,12 @@ function headers(req: Request) {
   };
 }
 
-const respond = (req: Request, body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: headers(req) });
+function respond(req: Request, body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: headers(req),
+  });
+}
 
 const db = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -52,7 +54,8 @@ async function configValues(keys: string[]) {
     .select("key,value")
     .in("key", keys);
   if (error) throw error;
-  return Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
+  const rows = data ?? [];
+  return Object.fromEntries(rows.map((row) => [row.key, row.value]));
 }
 
 async function hmacSha1Base64(secret: string, username: string) {
@@ -74,17 +77,22 @@ async function hmacSha1Base64(secret: string, username: string) {
 
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin");
-  if (origin && !allowedOrigin(origin))
+  if (origin && !allowedOrigin(origin)) {
     return respond(req, { error: "forbidden" }, 403);
-  if (req.method === "OPTIONS")
+  }
+  if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: headers(req) });
-  if (req.method !== "POST")
+  }
+  if (req.method !== "POST") {
     return respond(req, { error: "method_not_allowed" }, 405);
+  }
 
   try {
     const body = await req.json();
     const userId = await sessionUser(body?.p_token || null);
-    if (!userId) return respond(req, { error: "unauthorized" }, 401);
+    if (!userId) {
+      return respond(req, { error: "unauthorized" }, 401);
+    }
 
     await db
       .rpc("aurora_rate_limit", {
@@ -97,8 +105,9 @@ Deno.serve(async (req: Request) => {
     const values = await configValues(["turn_host", "turn_shared_secret"]);
     const host = String(values.turn_host || "").trim().toLowerCase();
     const secret = String(values.turn_shared_secret || "");
-    if (!/^[a-z0-9.-]+$/.test(host) || secret.length < 32)
+    if (!/^[a-z0-9.-]+$/.test(host) || secret.length < 32) {
       return respond(req, { error: "turn_not_configured" }, 503);
+    }
 
     const expiresUnix = Math.floor(Date.now() / 1000) + CREDENTIAL_TTL_SECONDS;
     const username = `${expiresUnix}:${userId}`;
@@ -121,8 +130,9 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    if (message.includes("rate_limited"))
+    if (message.includes("rate_limited")) {
       return respond(req, { error: "rate_limited" }, 429);
+    }
     console.error("aurora_turn_credentials_failed", message);
     return respond(req, { error: "turn_credentials_failed" }, 500);
   }
