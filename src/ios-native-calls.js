@@ -90,7 +90,10 @@ function flushPendingNativeEvents() {
   const pending = nativeEvents().slice();
   if (!pending.length) return;
 
-  if (!state.session && pending.some((event) => event?.name !== "aurora-voip-token")) {
+  if (
+    !state.session &&
+    pending.some((event) => event?.name !== "aurora-voip-token")
+  ) {
     schedulePendingFlush();
   }
 
