@@ -4,14 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'android/**'
-      - 'public/aurora-call-icon-512-v2.png'
-      - '.github/workflows/android-build.yml'
+      - "android/**"
+      - "public/aurora-call-icon-512-v2.png"
+      - ".github/workflows/android-build.yml"
   pull_request:
     paths:
-      - 'android/**'
-      - 'public/aurora-call-icon-512-v2.png'
-      - '.github/workflows/android-build.yml'
+      - "android/**"
+      - "public/aurora-call-icon-512-v2.png"
+      - ".github/workflows/android-build.yml"
   workflow_dispatch:
 
 permissions:
@@ -30,18 +30,18 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android 16 SDK
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle 9.5
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.5.0'
+          gradle-version: "9.5.0"
 
       - name: Build debug APK
         working-directory: android
