@@ -1,4 +1,4 @@
-name: Deploy self-hosted infrastructure
+name: Deploy Aurora VPS from Git
 
 on:
   workflow_dispatch:
@@ -9,13 +9,10 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     environment: production
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Validate deployment secrets
         env:
           VPS_HOST: ${{ secrets.AURORA_VPS_HOST }}
@@ -24,6 +21,7 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.AURORA_VPS_KNOWN_HOSTS }}
           TURN_SHARED_SECRET: ${{ secrets.AURORA_TURN_SHARED_SECRET }}
           NTFY_PASSWORD: ${{ secrets.AURORA_NTFY_DISTRIBUTOR_PASSWORD }}
+          CERTBOT_EMAIL: ${{ secrets.AURORA_CERTBOT_EMAIL }}
         run: |
           test -n "$VPS_HOST" || { echo "Missing AURORA_VPS_HOST"; exit 1; }
           test -n "$VPS_USER" || { echo "Missing AURORA_VPS_USER"; exit 1; }
@@ -31,6 +29,7 @@ jobs:
           test -n "$SSH_KNOWN_HOSTS" || { echo "Missing AURORA_VPS_KNOWN_HOSTS"; exit 1; }
           test ${#TURN_SHARED_SECRET} -ge 32 || { echo "AURORA_TURN_SHARED_SECRET is too short"; exit 1; }
           test ${#NTFY_PASSWORD} -ge 16 || { echo "AURORA_NTFY_DISTRIBUTOR_PASSWORD is too short"; exit 1; }
+          test -n "$CERTBOT_EMAIL" || { echo "Missing AURORA_CERTBOT_EMAIL"; exit 1; }
 
       - name: Configure pinned SSH host identity
         env:
@@ -42,52 +41,59 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_aurora"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
 
-      - name: Build protected deployment bundle
+      - name: Materialize protected server environment
         env:
           TURN_SHARED_SECRET: ${{ secrets.AURORA_TURN_SHARED_SECRET }}
           NTFY_PASSWORD: ${{ secrets.AURORA_NTFY_DISTRIBUTOR_PASSWORD }}
           CERTBOT_EMAIL: ${{ secrets.AURORA_CERTBOT_EMAIL }}
           TURN_EXTERNAL_IP: ${{ secrets.AURORA_TURN_EXTERNAL_IP }}
+          SUPABASE_URL: ${{ secrets.AURORA_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.AURORA_SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          tar -czf "$RUNNER_TEMP/aurora-infra.tgz" infra
           umask 077
           {
+            printf 'APP_DOMAIN=%q\n' 'auroracall.net'
+            printf 'PUSH_DOMAIN=%q\n' 'push.auroracall.net'
+            printf 'TURN_DOMAIN=%q\n' 'turn.auroracall.net'
             printf 'TURN_SHARED_SECRET=%q\n' "$TURN_SHARED_SECRET"
             printf 'NTFY_DISTRIBUTOR_PASSWORD=%q\n' "$NTFY_PASSWORD"
-            if test -n "$CERTBOT_EMAIL"; then
-              printf 'CERTBOT_EMAIL=%q\n' "$CERTBOT_EMAIL"
-            fi
-            if test -n "$TURN_EXTERNAL_IP"; then
-              printf 'TURN_EXTERNAL_IP=%q\n' "$TURN_EXTERNAL_IP"
-            fi
-          } > "$RUNNER_TEMP/aurora-infra-secrets.env"
+            printf 'CERTBOT_EMAIL=%q\n' "$CERTBOT_EMAIL"
+            if test -n "$TURN_EXTERNAL_IP"; then printf 'TURN_EXTERNAL_IP=%q\n' "$TURN_EXTERNAL_IP"; fi
+            if test -n "$SUPABASE_URL"; then printf 'AURORA_SUPABASE_URL=%q\n' "$SUPABASE_URL"; fi
+            if test -n "$SUPABASE_KEY"; then printf 'AURORA_SUPABASE_PUBLISHABLE_KEY=%q\n' "$SUPABASE_KEY"; fi
+          } > "$RUNNER_TEMP/aurora-vps-secrets.env"
 
-      - name: Upload and bootstrap VPS
+      - name: Pull exact Git commit and bootstrap VPS
         env:
           VPS_HOST: ${{ secrets.AURORA_VPS_HOST }}
           VPS_USER: ${{ secrets.AURORA_VPS_USER }}
         run: |
           SSH=(ssh -i "$HOME/.ssh/id_aurora" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
           SCP=(scp -i "$HOME/.ssh/id_aurora" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          "${SCP[@]}" "$RUNNER_TEMP/aurora-vps-secrets.env" "$VPS_USER@$VPS_HOST:/tmp/aurora-vps-secrets.env"
 
-          "${SCP[@]}" \
-            "$RUNNER_TEMP/aurora-infra.tgz" \
-            "$RUNNER_TEMP/aurora-infra-secrets.env" \
-            "$VPS_USER@$VPS_HOST:/tmp/"
-
-          "${SSH[@]}" "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          "${SSH[@]}" "$VPS_USER@$VPS_HOST" "AURORA_DEPLOY_SHA=$GITHUB_SHA bash -s" <<'REMOTE'
           set -euo pipefail
-          trap 'rm -rf /tmp/aurora-deploy /tmp/aurora-infra.tgz /tmp/aurora-infra-secrets.env' EXIT
-          rm -rf /tmp/aurora-deploy
-          mkdir -p /tmp/aurora-deploy
-          tar -xzf /tmp/aurora-infra.tgz -C /tmp/aurora-deploy
-          chmod 0600 /tmp/aurora-infra-secrets.env
-          sudo AURORA_SECRETS_FILE=/tmp/aurora-infra-secrets.env \
-            bash /tmp/aurora-deploy/infra/bootstrap-ubuntu24.sh
+          trap 'rm -f /tmp/aurora-vps-secrets.env' EXIT
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends git ca-certificates
+
+          if [[ ! -d /opt/aurora-call/.git ]]; then
+            sudo rm -rf /opt/aurora-call
+            sudo git clone https://github.com/AngryKotyara/Aurora-Call.git /opt/aurora-call
+          fi
+          sudo git -C /opt/aurora-call fetch --prune origin main
+          sudo git -C /opt/aurora-call checkout -B main origin/main
+          sudo git -C /opt/aurora-call reset --hard "$AURORA_DEPLOY_SHA"
+          sudo chmod 0755 /opt/aurora-call/infra/vps/bootstrap.sh
+          sudo AURORA_SECRETS_FILE=/tmp/aurora-vps-secrets.env \
+            bash /opt/aurora-call/infra/vps/bootstrap.sh
           REMOTE
 
-      - name: Verify public push endpoint
-        run: curl --fail --silent --show-error https://push.auroracall.net/v1/health
+      - name: Verify app and push
+        run: |
+          curl --fail --silent --show-error https://auroracall.net/healthz
+          curl --fail --silent --show-error https://push.auroracall.net/v1/health
 
       - name: Verify TURN TLS certificate
         run: |
