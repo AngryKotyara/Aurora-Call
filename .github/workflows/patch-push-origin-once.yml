@@ -1,4 +1,4 @@
-name: Patch push origin once
+name: Format backend functions once
 
 on:
   push:
@@ -8,43 +8,32 @@ permissions:
   contents: write
 
 jobs:
-  patch:
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Make push app origin configurable
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('supabase/functions/aurora-push/index.ts')
-          s = p.read_text()
-          s = s.replace(
-              'const PROD_ORIGIN = "https://aurora-call.vercel.app";',
-              'const PROD_ORIGIN = Deno.env.get("AURORA_APP_ORIGIN") || "https://auroracall.net";\nconst LEGACY_ORIGIN = "https://aurora-call.vercel.app";',
-              1,
-          )
-          s = s.replace(
-              'origin === PROD_ORIGIN ||\n    /^http:',
-              'origin === PROD_ORIGIN ||\n    origin === LEGACY_ORIGIN ||\n    /^http:',
-              1,
-          )
-          p.write_text(s)
-          PY
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npx prettier --write supabase/functions/aurora-push/index.ts
-      - name: Commit migration
+      - name: Apply repository formatter
         run: |
-          if git diff --quiet -- supabase/functions/aurora-push/index.ts; then
+          npx prettier --write \
+            supabase/functions/aurora-auth/index.ts \
+            supabase/functions/aurora-register-email/index.ts \
+            supabase/functions/aurora-push/index.ts
+      - name: Commit exact formatter output
+        run: |
+          if git diff --quiet -- supabase/functions; then
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add supabase/functions/aurora-push/index.ts
-          git commit -m "Make Aurora push origin configurable"
+          git add supabase/functions/aurora-auth/index.ts \
+            supabase/functions/aurora-register-email/index.ts \
+            supabase/functions/aurora-push/index.ts
+          git commit -m "Format Aurora backend functions"
           git push
