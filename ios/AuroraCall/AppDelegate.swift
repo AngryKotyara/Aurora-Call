@@ -19,6 +19,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
             NSLog("Aurora Call audio-session setup failed: %@", String(describing: error))
         }
 
+        NativeCallManager.shared.start()
+
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = ViewController()
         window.makeKeyAndVisible()
