@@ -1,4 +1,9 @@
-import { escapeHtml, formatCallDate, query } from "./utils.js";
+import {
+  escapeHtml,
+  formatCallDate,
+  formatCallDuration,
+  query,
+} from "./utils.js";
 import { logoUrl } from "./branding.js";
 import { installEdgeSwipeBack } from "./chat-edge-swipe.js";
 import { mountXperiaFlow } from "./xperia-flow.js";
@@ -16,8 +21,15 @@ function brandLockup(className = "") {
 
 function callIcon(mode) {
   return mode === "video"
-    ? `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="3"></rect><path d="m15 10 5-3v10l-5-3z"></path></svg>`
-    : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.3 3.8 10 7.7 8.2 10c1.2 2.4 3.3 4.5 5.8 5.8l2.3-1.8 3.9 2.7c.5.4.7 1 .4 1.6-.6 1.3-1.9 2.2-3.4 2.1C10 19.8 4.2 14 3.6 6.8c-.1-1.5.8-2.8 2.1-3.4.6-.3 1.2-.1 1.6.4z"></path></svg>`;
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="3"></rect><path d="m15 10 5-3v10l-5-3z"></path></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.3 3.8 10 7.7 8.2 10c1.2 2.4 3.3 4.5 5.8 5.8l2.3-1.8 3.9 2.7c.5.4.7 1 .4 1.6-.6 1.3-1.9 2.2-3.4 2.1C10 19.8 4.2 14 3.6 6.8c-.1-1.5.8-2.8 2.1-3.4.6-.3 1.2-.1 1.6.4z"></path></svg>`;
+}
+
+function directionIcon(isIncoming) {
+  const arrow = isIncoming
+    ? '<path d="M16.5 7.5 7.5 16.5M7.5 10v6.5H14"></path>'
+    : '<path d="m7.5 16.5 9-9M10 7.5h6.5V14"></path>';
+  return `<span class="history-direction-icon ${isIncoming ? "incoming" : "outgoing"}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${arrow}</svg></span>`;
 }
 
 function settingsIcon() {
@@ -55,16 +67,28 @@ function historyListItem(call) {
     isIncoming = call.direction === "incoming",
     direction = isIncoming ? "Входящий" : "Исходящий",
     mode = isVideo ? "видео" : "аудио";
+  const duration = formatCallDuration(call.duration_seconds);
   const statuses = {
-    answered: "Принят",
-    completed: "Завершён",
-    declined: "Отклонён",
-    started: "Ожидание ответа",
+    answered: "В разговоре",
+    completed: duration || "Завершён",
+    declined: "Нет ответа",
+    missed: "Нет ответа",
+    no_answer: "Нет ответа",
+    started: "Вызов…",
   };
-  const status = statuses[call.status] || "Завершён",
-    date = formatCallDate(call.created_at),
+  const status = statuses[call.status] || "Завершён";
+  const outcomeClass = ["declined", "missed", "no_answer"].includes(call.status)
+    ? "no-answer"
+    : call.status === "answered"
+      ? "active"
+      : call.status === "started"
+        ? "waiting"
+        : duration
+          ? "duration"
+          : "completed";
+  const date = formatCallDate(call.created_at),
     machineDate = escapeHtml(call.created_at || "");
-  return `<article class="card row history-row"><span class="history-avatar ${isVideo ? "video" : ""}" aria-hidden="true">${initial}</span><div class="grow"><div class="history-title"><b>${peerName}</b><span aria-hidden="true">${isVideo ? "▣" : "☎"}</span></div><div class="muted history-meta"><span class="direction ${isIncoming ? "incoming" : "outgoing"}">${isIncoming ? "↙" : "↗"}</span>${direction} · ${mode} · ${status}</div><time class="history-time" datetime="${machineDate}">${date}</time></div></article>`;
+  return `<article class="card row history-row"><span class="history-avatar ${isVideo ? "video" : ""}" aria-hidden="true">${initial}</span><div class="grow history-content"><div class="history-title"><b>${peerName}</b><span class="history-call-type ${isVideo ? "video" : "audio"}" role="img" aria-label="${isVideo ? "Видеозвонок" : "Аудиозвонок"}">${callIcon(call.mode)}</span></div><div class="muted history-meta">${directionIcon(isIncoming)}<span>${direction}</span><span class="history-separator" aria-hidden="true">·</span><span>${mode}</span><span class="history-separator" aria-hidden="true">·</span><span class="history-outcome ${outcomeClass}">${status}</span></div><time class="history-time" datetime="${machineDate}">${date}</time></div></article>`;
 }
 
 function auroraWaves() {

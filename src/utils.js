@@ -155,6 +155,19 @@ export function formatCallDate(value, now = new Date()) {
   return `${padDatePart(date.getDate())}.${padDatePart(date.getMonth() + 1)}.${date.getFullYear()}, ${time}`;
 }
 
+export function formatCallDuration(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const totalSeconds = Math.max(0, Math.floor(Number(value)));
+  if (!Number.isFinite(totalSeconds)) return "";
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0)
+    return `${hours}:${padDatePart(minutes)}:${padDatePart(seconds)}`;
+  return `${minutes}:${padDatePart(seconds)}`;
+}
+
 export function downloadAccessKey(username, accessKey) {
   const link = document.createElement("a");
   const file = new Blob([`Aurora Call\nИмя: ${username}\nКлюч: ${accessKey}`]);

@@ -39,7 +39,17 @@ test("main screen renders the logo, waves, history, and friend removal controls"
         mode: "video",
         direction: "incoming",
         status: "declined",
+        duration_seconds: null,
         created_at: "2026-08-05T10:00:00.000Z",
+      },
+      {
+        id: 2,
+        peer_name: "aurora_preview",
+        mode: "audio",
+        direction: "outgoing",
+        status: "completed",
+        duration_seconds: 125,
+        created_at: "2026-08-05T09:55:00.000Z",
       },
     ],
     mediaPermission: { status: "prompt" },
@@ -60,8 +70,15 @@ test("main screen renders the logo, waves, history, and friend removal controls"
   );
   assert.ok(document.querySelector(".xperia-flow svg"));
   assert.equal(document.querySelectorAll("[data-nav]").length, 4);
-  assert.match(document.querySelector(".history-row").textContent, /Входящий/);
-  assert.match(document.querySelector(".history-row").textContent, /Отклонён/);
+  const historyRows = document.querySelectorAll(".history-row");
+  assert.match(historyRows[0].textContent, /Входящий/);
+  assert.match(historyRows[0].textContent, /Нет ответа/);
+  assert.match(historyRows[1].textContent, /2:05/);
+  assert.equal(document.querySelectorAll(".history-call-type svg").length, 2);
+  assert.doesNotMatch(
+    Array.from(historyRows, (row) => row.textContent).join(" "),
+    /[☎▣]/,
+  );
   assert.equal(document.querySelectorAll("[data-request-media]").length, 2);
 
   const appBeforeNavigation = document.querySelector(".app");

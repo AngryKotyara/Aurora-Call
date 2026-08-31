@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   escapeHtml,
   formatCallDate,
+  formatCallDuration,
   generateAccessKey,
   hashSecret,
   isValidUsername,
@@ -45,4 +46,12 @@ test("formatCallDate uses readable labels for recent calls", () => {
     "Вчера, 23:07",
   );
   assert.equal(formatCallDate("not-a-date", now), "Дата неизвестна");
+});
+
+test("formatCallDuration formats short and long calls", () => {
+  assert.equal(formatCallDuration(null), "");
+  assert.equal(formatCallDuration("invalid"), "");
+  assert.equal(formatCallDuration(0), "0:00");
+  assert.equal(formatCallDuration(65.9), "1:05");
+  assert.equal(formatCallDuration(3725), "1:02:05");
 });

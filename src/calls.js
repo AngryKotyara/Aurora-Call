@@ -220,6 +220,14 @@ function closePeer() {
   scheduleSignalPoll();
 }
 
+async function finishCallRecord(callId) {
+  if (!state.session || !callId) return;
+  await rpc("finish_call", {
+    p_token: state.session.token,
+    p_call_id: callId,
+  }).catch(() => {});
+}
+
 async function sendSignal(kind, payload) {
   if (!state.session || !state.selectedFriend || !state.callId) return;
   await rpc("send_call_signal", {
@@ -370,6 +378,7 @@ async function processSignal(signal) {
       setRemoteScreenShareActive(Boolean(signal.payload?.active));
     } else if (signal.kind === "hangup" || signal.kind === "decline") {
       if (signal.kind === "decline") showToast("Собеседник отклонил звонок");
+      if (signal.kind === "hangup") await finishCallRecord(signal.call_id);
       closePeer();
     }
   } catch (error) {
@@ -383,6 +392,7 @@ async function handleSignal(signal) {
       pendingSignals.delete(signal.call_id);
       if (dismissIncomingCall(signal.call_id)) {
         if (signal.kind === "decline") showToast("Собеседник отклонил звонок");
+        if (signal.kind === "hangup") await finishCallRecord(signal.call_id);
         return;
       }
     }
@@ -408,11 +418,7 @@ export async function startCall(mode) {
 
 export async function hangupCall() {
   if (state.callId) await sendSignal("hangup", {}).catch(() => {});
-  if (state.session && state.callId)
-    await rpc("finish_call", {
-      p_token: state.session.token,
-      p_call_id: state.callId,
-    }).catch(() => {});
+  await finishCallRecord(state.callId);
   closePeer();
 }
 
