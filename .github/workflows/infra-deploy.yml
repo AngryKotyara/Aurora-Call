@@ -24,7 +24,6 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.AURORA_VPS_KNOWN_HOSTS }}
           TURN_SHARED_SECRET: ${{ secrets.AURORA_TURN_SHARED_SECRET }}
           NTFY_PASSWORD: ${{ secrets.AURORA_NTFY_DISTRIBUTOR_PASSWORD }}
-          CERTBOT_EMAIL: ${{ secrets.AURORA_CERTBOT_EMAIL }}
         run: |
           test -n "$VPS_HOST" || { echo "Missing AURORA_VPS_HOST"; exit 1; }
           test -n "$VPS_USER" || { echo "Missing AURORA_VPS_USER"; exit 1; }
@@ -32,7 +31,6 @@ jobs:
           test -n "$SSH_KNOWN_HOSTS" || { echo "Missing AURORA_VPS_KNOWN_HOSTS"; exit 1; }
           test ${#TURN_SHARED_SECRET} -ge 32 || { echo "AURORA_TURN_SHARED_SECRET is too short"; exit 1; }
           test ${#NTFY_PASSWORD} -ge 16 || { echo "AURORA_NTFY_DISTRIBUTOR_PASSWORD is too short"; exit 1; }
-          test -n "$CERTBOT_EMAIL" || { echo "Missing AURORA_CERTBOT_EMAIL"; exit 1; }
 
       - name: Configure pinned SSH host identity
         env:
@@ -56,7 +54,9 @@ jobs:
           {
             printf 'TURN_SHARED_SECRET=%q\n' "$TURN_SHARED_SECRET"
             printf 'NTFY_DISTRIBUTOR_PASSWORD=%q\n' "$NTFY_PASSWORD"
-            printf 'CERTBOT_EMAIL=%q\n' "$CERTBOT_EMAIL"
+            if test -n "$CERTBOT_EMAIL"; then
+              printf 'CERTBOT_EMAIL=%q\n' "$CERTBOT_EMAIL"
+            fi
             if test -n "$TURN_EXTERNAL_IP"; then
               printf 'TURN_EXTERNAL_IP=%q\n' "$TURN_EXTERNAL_IP"
             fi
