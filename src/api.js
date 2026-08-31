@@ -15,10 +15,10 @@ function announceExpiredSession() {
   document.dispatchEvent(new CustomEvent("aurora-session-expired"));
 }
 
-async function sendPushEvent(action, body) {
+async function sendFunctionEvent(functionName, action, body) {
   try {
     await resilientFetch(
-      `${config.functionsBaseUrl}aurora-push`,
+      `${config.functionsBaseUrl}${functionName}`,
       {
         method: "POST",
         headers: {
@@ -30,17 +30,27 @@ async function sendPushEvent(action, body) {
       { retries: 0, timeoutMs: 7000 },
     );
   } catch (error) {
-    console.warn("push notification dispatch failed", error);
+    console.warn(`${functionName} dispatch failed`, error);
   }
+}
+
+function sendPushEvent(action, body) {
+  return sendFunctionEvent("aurora-push", action, body);
+}
+
+function sendAPNSEvent(action, body) {
+  return sendFunctionEvent("aurora-apns", action, body);
 }
 
 function dispatchPushForRpc(functionName, requestBody, result) {
   if (!requestBody?.p_to || result == null) return;
   if (functionName === "start_call") {
-    void sendPushEvent("notify_call", {
+    const notification = {
       p_to: requestBody.p_to,
       call_id: result,
-    });
+    };
+    void sendPushEvent("notify_call", notification);
+    void sendAPNSEvent("notify_call", notification);
     return;
   }
   if (
