@@ -123,7 +123,10 @@ document.addEventListener("aurora-auth-register", (event) => {
   void runAuthAction(() => register(username, email));
 });
 
-function logout() {
+async function logout() {
+  const detail = { tasks: [] };
+  document.dispatchEvent(new CustomEvent("aurora-before-logout", { detail }));
+  await Promise.allSettled(detail.tasks);
   clearSession();
   renderSequence += 1;
   currentScreen = "home";
