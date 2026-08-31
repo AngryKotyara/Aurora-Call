@@ -2,12 +2,15 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.112.4";
 import webpush from "npm:web-push@3.6.7";
 
-const PROD_ORIGIN = "https://aurora-call.vercel.app";
+const PROD_ORIGIN =
+  Deno.env.get("AURORA_APP_ORIGIN") || "https://auroracall.net";
+const LEGACY_ORIGIN = "https://aurora-call.vercel.app";
 const APP_ICON = `${PROD_ORIGIN}/aurora-call-logo.png`;
 
 function allowedOrigin(origin: string) {
   return (
     origin === PROD_ORIGIN ||
+    origin === LEGACY_ORIGIN ||
     /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)
   );
 }
