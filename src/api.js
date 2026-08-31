@@ -23,7 +23,7 @@ async function sendPushEvent(action, body) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Client-Info": "aurora-call-web/2",
+          "X-Client-Info": "aurora-call-web/3",
         },
         body: JSON.stringify({ action, ...body }),
       },
@@ -78,7 +78,7 @@ export async function rpc(functionName, body, policy = {}) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Client-Info": "aurora-call-web/2",
+        "X-Client-Info": "aurora-call-web/3",
       },
       body: JSON.stringify(body),
     },
@@ -104,7 +104,7 @@ export async function loginByAccessKey(username, accessKey) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Client-Info": "aurora-call-web/2",
+        "X-Client-Info": "aurora-call-web/3",
       },
       body: JSON.stringify({ username, accessKey }),
     },
@@ -117,13 +117,12 @@ export async function loginByAccessKey(username, accessKey) {
 
 export async function registerByEmail(username, email) {
   const response = await resilientFetch(
-    `${config.publicFunctionsBaseUrl}aurora-register-email`,
+    config.registerEmailUrl,
     {
       method: "POST",
       headers: {
-        apikey: config.supabasePublishableKey,
         "Content-Type": "application/json",
-        "X-Client-Info": "aurora-call-web/2",
+        "X-Client-Info": "aurora-call-web/3",
       },
       body: JSON.stringify({ username, email }),
     },
