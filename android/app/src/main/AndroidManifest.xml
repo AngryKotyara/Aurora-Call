@@ -13,6 +13,8 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:label="Aurora Call"
+        android:icon="@drawable/aurora_call_icon"
+        android:roundIcon="@drawable/aurora_call_icon"
         android:theme="@style/AppTheme"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
