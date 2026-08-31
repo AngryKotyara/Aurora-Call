@@ -55,6 +55,15 @@ export async function migrateLegacySession() {
 }
 
 export function clearSession() {
+  const markOffline = state.session
+    ? fetch("/api/rpc/touch_call_presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({ p_friend: null, p_activity: "offline" }),
+      }).catch(() => {})
+    : Promise.resolve();
+
   state.session = null;
   state.friends = [];
   state.callHistory = [];
@@ -62,9 +71,11 @@ export function clearSession() {
   state.lastSignalId = 0;
   localStorage.removeItem(config.sessionStorageKey);
   void setAppBadgeCount(0);
-  void fetch("/api/auth-logout", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    keepalive: true,
-  }).catch(() => {});
+  void markOffline.finally(() =>
+    fetch("/api/auth-logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+    }).catch(() => {}),
+  );
 }
