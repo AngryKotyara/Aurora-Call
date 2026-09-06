@@ -26,7 +26,10 @@ targets:
         CODE_SIGN_ENTITLEMENTS: AuroraCall/AuroraCall.entitlements
         ENABLE_BITCODE: NO
       configs:
+        Debug:
+          APS_ENVIRONMENT: development
         Release:
+          APS_ENVIRONMENT: production
           CODE_SIGN_STYLE: Manual
           PROVISIONING_PROFILE_SPECIFIER: "$(AURORA_APP_PROFILE)"
     dependencies:

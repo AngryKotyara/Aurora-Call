@@ -15,6 +15,7 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
 
         let controller = WKUserContentController()
         controller.add(self, name: "auroraScreenShare")
+        controller.add(self, name: "auroraNativeCall")
 
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
@@ -34,6 +35,17 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+
+        let nativeCalls = NativeCallManager.shared
+        nativeCalls.onOpenCall = { [weak self] callId in
+            self?.dispatchNativeEvent("aurora-call-open", detail: ["callId": callId])
+        }
+        nativeCalls.onEndCall = { [weak self] callId in
+            self?.dispatchNativeEvent("aurora-call-end-native", detail: ["callId": callId])
+        }
+        nativeCalls.onVoIPToken = { [weak self] token in
+            self?.dispatchNativeEvent("aurora-voip-token", detail: ["token": token])
+        }
 
         let configuredURL = Bundle.main.object(forInfoDictionaryKey: "AuroraWebURL") as? String
         let urlString = configuredURL?.isEmpty == false
@@ -59,6 +71,12 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
         webView?.configuration.userContentController.removeScriptMessageHandler(
             forName: "auroraScreenShare"
         )
+        webView?.configuration.userContentController.removeScriptMessageHandler(
+            forName: "auroraNativeCall"
+        )
+        NativeCallManager.shared.onOpenCall = nil
+        NativeCallManager.shared.onEndCall = nil
+        NativeCallManager.shared.onVoIPToken = nil
     }
 
     private func isTrustedOrigin(scheme: String, host: String) -> Bool {
@@ -77,20 +95,36 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
         didReceive message: WKScriptMessage
     ) {
         let origin = message.frameInfo.securityOrigin
-        guard message.name == "auroraScreenShare",
-              message.frameInfo.isMainFrame,
+        guard message.frameInfo.isMainFrame,
               isTrustedOrigin(scheme: origin.protocol, host: origin.host),
               let body = message.body as? [String: Any],
               let action = body["action"] as? String else { return }
 
-        switch action {
-        case "start":
-            ScreenShareFiles.writeStatus("starting")
-            ScreenBroadcastPicker.shared.present(from: view)
-        case "stop":
-            ScreenBroadcastPicker.shared.present(from: view)
-        default:
-            break
+        if message.name == "auroraScreenShare" {
+            switch action {
+            case "start":
+                ScreenShareFiles.writeStatus("starting")
+                ScreenBroadcastPicker.shared.present(from: view)
+            case "stop":
+                ScreenBroadcastPicker.shared.present(from: view)
+            default:
+                break
+            }
+            return
+        }
+
+        if message.name == "auroraNativeCall" {
+            switch action {
+            case "ended":
+                guard let callId = body["callId"] as? String, !callId.isEmpty else { return }
+                NativeCallManager.shared.reportCallEnded(callId: callId)
+            case "requestVoIPToken":
+                if let token = NativeCallManager.shared.voipToken {
+                    dispatchNativeEvent("aurora-voip-token", detail: ["token": token])
+                }
+            default:
+                break
+            }
         }
     }
 
@@ -116,6 +150,12 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
         decisionHandler(.cancel)
     }
 
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if let token = NativeCallManager.shared.voipToken {
+            dispatchNativeEvent("aurora-voip-token", detail: ["token": token])
+        }
+    }
+
     @available(iOS 15.0, *)
     func webView(
         _ webView: WKWebView,
@@ -127,6 +167,32 @@ final class ViewController: UIViewController, WKScriptMessageHandler, WKNavigati
         let isTrusted = frame.isMainFrame
             && isTrustedOrigin(scheme: origin.protocol, host: origin.host)
         decisionHandler(isTrusted ? .grant : .deny)
+    }
+
+    private func dispatchNativeEvent(_ name: String, detail: [String: String]) {
+        guard webView != nil,
+              let detailData = try? JSONSerialization.data(withJSONObject: detail),
+              let detailJSON = String(data: detailData, encoding: .utf8),
+              let nameData = try? JSONEncoder().encode(name),
+              let nameJSON = String(data: nameData, encoding: .utf8) else { return }
+
+        let javascript = """
+        (() => {
+          const event = { name: \(nameJSON), detail: \(detailJSON) };
+          const queue = Array.isArray(window.__auroraPendingNativeEvents)
+            ? window.__auroraPendingNativeEvents
+            : [];
+          queue.push(event);
+          if (queue.length > 20) queue.splice(0, queue.length - 20);
+          window.__auroraPendingNativeEvents = queue;
+          document.dispatchEvent(new CustomEvent(event.name, { detail: event.detail }));
+        })();
+        """
+        webView.evaluateJavaScript(javascript) { _, error in
+            if let error {
+                NSLog("Aurora Call native event dispatch failed: %@", String(describing: error))
+            }
+        }
     }
 
     @objc private func relayReplayKitFrame() {

@@ -3,6 +3,7 @@
 import "./media-compression-hook.js";
 import "./resumable-media.js?v=20260830-media3";
 import "./app.js?v=20260830-perf1";
+import "./ios-native-calls.js?v=20260831-ios1";
 import "./auth-screen.js?v=20260831-icon2";
 import "./auth-screen-polish.js?v=20260831-icon2";
 import "./android-auth-bridge.js?v=20260818-android-auth2";
