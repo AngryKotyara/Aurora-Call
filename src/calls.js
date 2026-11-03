@@ -1,6 +1,7 @@
 import { rpc } from "./api.js";
 import { config } from "./config.js";
 import { refreshTurnCredentials } from "./turn-credentials.js";
+import { hasTurnServer, relayOnlyEnabled } from "./call-privacy.js";
 import {
   notifyAndroidCallActive,
   notifyAndroidCallEnded,
@@ -174,7 +175,17 @@ async function toggleScreenShare() {
 
 async function prepareLocalMedia(mode) {
   try {
-    const constraints = { audio: true, video: mode === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } } : false };
+    const constraints = {
+      audio: true,
+      video:
+        mode === "video"
+          ? {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 24, max: 30 },
+            }
+          : false,
+    };
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     state.mediaStream = stream;
     return stream;
@@ -250,7 +261,10 @@ async function sendSignal(kind, payload) {
 }
 
 function createPeer() {
-  const peer = new RTCPeerConnection({ iceServers: config.iceServers });
+  const peer = new RTCPeerConnection({
+    iceServers: config.iceServers,
+    ...(relayOnlyEnabled() ? { iceTransportPolicy: "relay" } : {}),
+  });
   state.peer = peer;
   state.remoteStream = new MediaStream();
   peer.ontrack = (event) => {
@@ -284,7 +298,9 @@ function createPeer() {
           parameters.degradationPreference = "balanced";
           void sender.setParameters(parameters).catch(() => {});
         }
-      } catch { /* Older browsers use their default adaptation. */ }
+      } catch {
+        /* Older browsers use their default adaptation. */
+      }
     }
   });
   return peer;
@@ -295,7 +311,11 @@ async function callFriend(mode) {
   if (!friend || !state.session) return;
   try {
     await prepareLocalMedia(mode);
-    await refreshTurnCredentials();
+    const turnReady = await refreshTurnCredentials();
+    if (relayOnlyEnabled() && (!turnReady || !hasTurnServer(config.iceServers)))
+      throw new Error(
+        "Защищённый сервер звонков недоступен. Попробуйте позже.",
+      );
     const callId = await rpc("start_call", {
       p_token: state.session.token,
       p_to: friend.id,
@@ -334,7 +354,11 @@ async function acceptIncoming(call) {
   state.selectedFriend = { id: call.from_id, name: call.from_name };
   try {
     await prepareLocalMedia(call.mode);
-    await refreshTurnCredentials();
+    const turnReady = await refreshTurnCredentials();
+    if (relayOnlyEnabled() && (!turnReady || !hasTurnServer(config.iceServers)))
+      throw new Error(
+        "Защищённый сервер звонков недоступен. Попробуйте позже.",
+      );
     const screenShare = getScreenShareSupport();
     renderCallModal({
       friendName: call.from_name,
@@ -360,7 +384,8 @@ async function acceptIncoming(call) {
       p_accept: true,
     });
     await flushPendingSignals(call.id);
-  } catch {
+  } catch (error) {
+    if (relayOnlyEnabled() && error?.message) showToast(error.message);
     await rpc("answer_call", {
       p_token: state.session.token,
       p_call_id: call.id,

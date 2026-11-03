@@ -31,7 +31,7 @@ test("same-origin RPC proxy injects the cookie token and blocks legacy login", (
 
   assert.match(proxy, /readSessionToken\(req\)/);
   assert.match(proxy, /p_token: token/);
-  assert.match(proxy, /"login_call_user"/);
+  assert.match(proxy, /const ALLOWED = new Set/);
   assert.match(proxy, /sameOriginRequest\(req\)/);
 });
 

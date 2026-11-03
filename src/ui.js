@@ -7,6 +7,11 @@ import {
 import { logoUrl } from "./branding.js";
 import { installEdgeSwipeBack } from "./chat-edge-swipe.js";
 import { mountXperiaFlow } from "./xperia-flow.js";
+import {
+  isNativeApp,
+  relayOnlyEnabled,
+  setRelayOnlyEnabled,
+} from "./call-privacy.js";
 
 const root = document.getElementById("root");
 
@@ -224,6 +229,23 @@ export function renderMain({
   root.innerHTML = `<main class="app" data-active-screen="${activeScreen}"><section class="screen ${activeScreen === "home" ? "on" : ""}" data-screen="home"><header class="home-hero"><div class="home-copy">${brandLockup("hero-brand")}<h1>Звонки</h1><p>Выберите друга и начните разговор.</p></div>${auroraWaves()}</header>${mediaPermission?.status === "granted" ? "" : mediaAccessCard(mediaPermission, true)}<div class="grid"><button id="audio" class="call">☎<br />Аудиозвонок</button><button id="video" class="call video">▣<br />Видеозвонок</button></div><h2>Друзья</h2>${callFriends}</section><section class="screen ${activeScreen === "history" ? "on" : ""}" data-screen="history"><div class="section-heading"><div><span class="eyebrow">Последние события</span><h1>История звонков</h1></div><span class="history-count" aria-label="Звонков в истории: ${callHistory.length}">${callHistory.length}</span></div>${historyItems}</section><section class="screen ${activeScreen === "friends" ? "on" : ""}" data-screen="friends"><h1>Друзья</h1>${allFriends}</section><section class="screen ${activeScreen === "settings" ? "on" : ""}" data-screen="settings"><h1>Настройки</h1><div class="card"><span class="muted">Имя пользователя</span><h2>${escapeHtml(session.username)}</h2></div>${mediaAccessCard(mediaPermission)}<div class="card"><h2>QR-приглашение</h2><p class="muted">Одноразовое приглашение.</p><button id="generate-invite" class="btn">Создать QR</button><div id="invite"></div></div><button id="logout" class="btn ghost">Выйти</button></section>${navigation(activeScreen)}</main>`;
   mountXperiaFlow(root);
   const app = root.querySelector(".app");
+  if (!isNativeApp()) {
+    const privacy = document.createElement("div");
+    privacy.className = "card";
+    privacy.innerHTML =
+      '<h2>Защита IP-адреса</h2><p class="muted">Звонки через сервер скрывают ваш IP-адрес от собеседника. При недоступности сервера звонок не соединится.</p><label><input type="checkbox" data-relay-only> Только через сервер</label>';
+    const toggle = privacy.querySelector("[data-relay-only]");
+    toggle.checked = relayOnlyEnabled();
+    toggle.addEventListener("change", () => {
+      try {
+        setRelayOnlyEnabled(toggle.checked);
+      } catch {
+        toggle.checked = !toggle.checked;
+      }
+    });
+    const settings = app.querySelector('[data-screen="settings"]');
+    settings.insertBefore(privacy, settings.querySelector("#logout"));
+  }
   const availableScreens = new Set(["home", "history", "friends", "settings"]);
   const activateScreen = (requestedScreen) => {
     const nextScreen = availableScreens.has(requestedScreen)

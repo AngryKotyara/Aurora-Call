@@ -18,8 +18,11 @@ export default async function handler(req, res) {
   if (!/^[0-9a-f-]{36}$/i.test(token))
     return res.status(400).json({ error: "invalid_session" });
 
-  const probe = await supabaseRpc("list_call_friends", { p_token: token });
+  const probe = await supabaseRpc("get_call_profile", { p_token: token });
   if (!probe.ok) return res.status(401).json({ error: "invalid_session" });
+  const profile = await probe.json().catch(() => null);
+  if (!profile || typeof profile.user_id !== "string")
+    return res.status(401).json({ error: "invalid_session" });
 
   setSessionCookie(res, token, 86400);
   return res.status(200).json({ ok: true });
