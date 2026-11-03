@@ -10,6 +10,14 @@ const BACKGROUND_RETRY_DELAYS = [1200, 2500, 5000, 10000, 20000];
 const signedUrlCache = new Map();
 const signedUrlPending = new Map();
 const imageRetryState = new WeakMap();
+let cacheGeneration = 0;
+const visibilityObserver = typeof IntersectionObserver === 'function'
+  ? new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      visibilityObserver.unobserve(entry.target);
+      void hydrate(entry.target);
+    }), { rootMargin: '400px' })
+  : null;
 
 function sessionToken() {
   if (state.session?.token) return state.session.token;
@@ -34,6 +42,7 @@ function mediaError(code, status = 0) {
 }
 
 async function getSignedUrl(messageId, { force = false } = {}) {
+  const generation = cacheGeneration;
   const cached = signedUrlCache.get(messageId);
   if (!force && cached?.expiresAt > Date.now()) return cached.url;
   if (signedUrlPending.has(messageId)) return signedUrlPending.get(messageId);
@@ -69,7 +78,9 @@ async function getSignedUrl(messageId, { force = false } = {}) {
           url: payload.url,
           expiresAt: Date.now() + SIGNED_URL_TTL_MS,
         };
+        if (generation !== cacheGeneration) throw mediaError('session_changed');
         signedUrlCache.set(messageId, value);
+        if (signedUrlCache.size > 100) signedUrlCache.delete(signedUrlCache.keys().next().value);
         return value.url;
       } catch (error) {
         if (error?.code === "not_storage_media") throw error;
@@ -77,7 +88,9 @@ async function getSignedUrl(messageId, { force = false } = {}) {
       }
     }
     throw lastError || mediaError("download_failed");
-  })().finally(() => signedUrlPending.delete(messageId));
+  })().finally(() => {
+    if (signedUrlPending.get(messageId) === task) signedUrlPending.delete(messageId);
+  });
 
   signedUrlPending.set(messageId, task);
   return task;
@@ -172,9 +185,9 @@ function revealImageOnce(frame, url) {
   if (!image) return Promise.reject(mediaError("image_missing"));
 
   image.decoding = "async";
-  image.loading = "eager";
+  image.loading = "lazy";
   try {
-    image.fetchPriority = "high";
+    image.fetchPriority = "auto";
   } catch {
     // Older WebKit versions do not expose fetchPriority.
   }
@@ -328,13 +341,27 @@ function scan({ retryFailed = false } = {}) {
     .forEach((frame) => {
       if (retryFailed && frame.dataset.storageFailed === "true")
         frame.dataset.storageFailed = "false";
-      void hydrate(frame, { force: retryFailed });
+      if (visibilityObserver) {
+        if (retryFailed) visibilityObserver.unobserve(frame);
+        visibilityObserver.observe(frame);
+      }
+      else void hydrate(frame, { force: retryFailed });
     });
 }
 
-const observer = new MutationObserver(() => scan());
+let scanScheduled = false;
+const observer = new MutationObserver((records) => {
+  if (scanScheduled || !records.some(record => [...record.addedNodes].some(node => node.nodeType === 1 && (node.matches?.(STORAGE_MEDIA_FRAME_SELECTOR) || node.querySelector?.(STORAGE_MEDIA_FRAME_SELECTOR))))) return;
+  scanScheduled = true;
+  queueMicrotask(() => { scanScheduled = false; scan(); });
+});
 observer.observe(document.documentElement, { childList: true, subtree: true });
 window.addEventListener("pageshow", () => scan({ retryFailed: true }));
 window.addEventListener("online", () => scan({ retryFailed: true }));
 document.addEventListener("aurora-chat-media-complete", () => scan());
+document.addEventListener('aurora-session-cleared', () => {
+  cacheGeneration += 1;
+  signedUrlCache.clear();
+  signedUrlPending.clear();
+});
 scan();

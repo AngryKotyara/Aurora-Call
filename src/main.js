@@ -24,6 +24,8 @@ import "./permission-check-animation.js?v=20260815-permissions2";
 import { initPushNotifications } from "./push-notifications.js?v=20260831-android1";
 import { initTurnCredentials } from "./turn-credentials.js?v=20260831-turn1";
 import "./logout-push-bridge.js";
+import "./performance.js";
+import "./performance.css";
 
 function syncPageActivity() {
   document.documentElement.classList.toggle(

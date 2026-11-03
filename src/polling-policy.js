@@ -9,9 +9,13 @@ export function chatPollDelay({
   hasSession = true,
   visible = true,
   conversationOpen = false,
+  online = true,
+  activeCall = false,
 } = {}) {
   if (!hasSession) return 60_000;
+  if (!online) return 60_000;
   if (!visible) return CHAT_POLL_BACKGROUND_MS;
+  if (activeCall) return CHAT_POLL_IDLE_MS;
   return conversationOpen ? CHAT_POLL_ACTIVE_MS : CHAT_POLL_IDLE_MS;
 }
 

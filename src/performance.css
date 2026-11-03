@@ -1,0 +1,16 @@
+/* Keep the interface responsive when resources are constrained or a call is active. */
+:is(.performance-lite body, body.call-active) .xperia-flow::before,
+:is(.performance-lite body, body.call-active) .aurora-ribbon-group,
+:is(.performance-lite body, body.call-active) .aurora-ribbon-highlight,
+:is(.performance-lite body, body.call-active) .aurora-ribbon-sheen { animation-play-state: paused !important; }
+:is(.performance-lite body, body.call-active) .aurora-ribbon { filter: none !important; }
+:is(.performance-lite body, body.call-active) .nav,
+:is(.performance-lite body, body.call-active) .chat-topbar,
+:is(.performance-lite body, body.call-active) .chat-conversation-header,
+:is(.performance-lite body, body.call-active) .home-screen-flow > .grid .call {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .xperia-flow::before, .aurora-ribbon-group, .aurora-ribbon-highlight, .aurora-ribbon-sheen { animation: none !important; }
+}

@@ -174,7 +174,7 @@ async function toggleScreenShare() {
 
 async function prepareLocalMedia(mode) {
   try {
-    const constraints = { audio: true, video: mode === "video" };
+    const constraints = { audio: true, video: mode === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } } : false };
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     state.mediaStream = stream;
     return stream;
@@ -276,7 +276,16 @@ function createPeer() {
   };
   state.mediaStream?.getTracks().forEach((track) => {
     const sender = peer.addTrack(track, state.mediaStream);
-    if (track.kind === "video") state.videoSender = sender;
+    if (track.kind === "video") {
+      state.videoSender = sender;
+      try {
+        const parameters = sender.getParameters?.();
+        if (parameters && sender.setParameters) {
+          parameters.degradationPreference = "balanced";
+          void sender.setParameters(parameters).catch(() => {});
+        }
+      } catch { /* Older browsers use their default adaptation. */ }
+    }
   });
   return peer;
 }

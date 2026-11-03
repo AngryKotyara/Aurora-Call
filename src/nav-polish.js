@@ -25,6 +25,7 @@ const icons = {
 
 function ensureStyles() {
   let style = document.querySelector("#aurora-nav-polish");
+  if (style) return;
   if (!style) {
     style = document.createElement("style");
     style.id = "aurora-nav-polish";
@@ -67,6 +68,7 @@ function makeIcon(name) {
 
 function replaceIcon(button, name) {
   if (!button) return;
+  if (button.querySelector(`[data-nav-icon="${name}"]`)) return;
   const badge = button.querySelector(".chat-nav-badge");
   button.replaceChildren(makeIcon(name));
   if (badge) button.append(badge);

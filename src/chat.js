@@ -217,6 +217,8 @@ function closeChat() {
   const layer = document.querySelector("#chat-layer");
   if (layer) layer.hidden = true;
   document.body.classList.remove("chat-active");
+  mediaCache.forEach(url => { if (url?.startsWith?.('blob:')) URL.revokeObjectURL(url); });
+  mediaCache.clear();
   scheduleBadgeRefresh();
 }
 
@@ -464,6 +466,8 @@ function installLongPressActions() {
   document
     .querySelectorAll("#chat-layer .chat-bubble[data-message-own=true]")
     .forEach((bubble) => {
+      if (bubble.dataset.actionsBound === "true") return;
+      bubble.dataset.actionsBound = "true";
       let timer = null,
         startX = 0,
         startY = 0;
@@ -515,15 +519,45 @@ async function renderConversation() {
   const messages = [...olderMessages.filter(message => !latestIds.has(String(message.id))), ...latestMessages];
   hasThreadCache = false;
   scheduleBadgeRefresh(0);
+  const previousMessages = currentMessages;
   currentMessages = new Map(
     messages.map((message) => [String(message.id), message]),
   );
+  const existingView = layer.querySelector('.chat-conversation-view');
+  if (existingView?.dataset.friendId === String(friendId)) {
+    const list = existingView.querySelector('.chat-messages');
+    const existing = new Map([...list.querySelectorAll('.chat-bubble[data-message-id]')].map(node => [node.dataset.messageId, node]));
+    list.querySelector('.chat-empty-conversation')?.remove();
+    for (const [id, node] of existing) if (!currentMessages.has(id)) node.remove();
+    const loadOlder = list.querySelector('button[data-load-older]');
+    let cursor = loadOlder ? loadOlder.nextSibling : list.firstChild;
+    for (const message of messages) {
+      const id = String(message.id);
+      let node = existing.get(id);
+      if (!node || JSON.stringify(previousMessages.get(id)) !== JSON.stringify(message)) {
+        const template = document.createElement('template');
+        template.innerHTML = messageMarkup(message);
+        const replacement = template.content.firstElementChild;
+        if (node) { if (cursor === node) cursor = node.nextSibling; node.replaceWith(replacement); }
+        node = replacement;
+      }
+      if (node !== cursor) list.insertBefore(node, cursor);
+      cursor = node.nextSibling;
+    }
+    if (!messages.length && !list.querySelector('.is-sending')) list.insertAdjacentHTML('beforeend', '<div class="chat-empty-conversation">Напишите первое сообщение</div>');
+    if (wasNearBottom) list.scrollTop = list.scrollHeight;
+    installLongPressActions();
+    void hydrateMedia();
+    return;
+  }
   layer.innerHTML = `<section class="chat-shell chat-conversation-view"><header class="chat-conversation-header"><button class="chat-icon-btn" data-chat-back aria-label="Назад">${icon("back")}</button><span class="chat-avatar small">${escapeHtml(openedFriend.name?.[0]?.toUpperCase() || "?")}</span><div class="chat-peer"><b>${escapeHtml(openedFriend.name)}</b><span>личный чат</span></div><div class="chat-header-actions"><button class="chat-call-shortcut" data-chat-call="audio" title="Аудиозвонок">☎</button><button class="chat-call-shortcut" data-chat-call="video" title="Видеозвонок">▣</button></div></header><div class="chat-messages">${messages.length ? messages.map(messageMarkup).join("") : '<div class="chat-empty-conversation">Напишите первое сообщение</div>'}</div><form class="chat-composer"><input class="chat-file" type="file" accept="image/*,video/*" hidden><button type="button" class="chat-icon-btn attach" data-chat-attach aria-label="Прикрепить фото или видео">${icon("attach")}</button><textarea class="chat-input" rows="1" maxlength="4000" placeholder="Сообщение" aria-label="Сообщение"></textarea><button class="chat-send" aria-label="Отправить">${icon("send")}</button></form></section>`;
+  layer.querySelector('.chat-conversation-view').dataset.friendId = String(friendId);
   const messagesEl = layer.querySelector(".chat-messages");
   if (hasOlderMessages && messages.length) {
     const loadMore = document.createElement('button');
     loadMore.type = 'button';
     loadMore.className = 'btn ghost';
+    loadMore.dataset.loadOlder = '';
     loadMore.textContent = 'Загрузить более ранние сообщения';
     messagesEl.prepend(loadMore);
     loadMore.onclick = async () => {
@@ -636,6 +670,7 @@ async function sendText() {
       p_media_mime: null,
       p_media_name: null,
     });
+    optimistic.remove();
     await renderConversation();
   } catch (error) {
     optimistic.remove();
@@ -786,6 +821,8 @@ function currentChatPollDelay() {
     hasSession: Boolean(state.session),
     visible: document.visibilityState !== "hidden",
     conversationOpen: Boolean(openedFriend && layer && !layer.hidden),
+    online: navigator.onLine !== false,
+    activeCall: Boolean(state.callId || state.peer),
   });
 }
 
@@ -834,5 +871,6 @@ export function initChat() {
     scheduleBadgeRefresh(document.visibilityState === "hidden" ? undefined : 0),
   );
   window.addEventListener("online", () => scheduleBadgeRefresh(0));
+  window.addEventListener("offline", () => scheduleBadgeRefresh());
   scheduleBadgeRefresh(0);
 }
