@@ -11,9 +11,25 @@ function installStyles() {
   }
 
   style.textContent = `
+    /* Contain the wide decorative glows without creating sideways scrolling. */
+    html:has(.auth-v2),
+    body:has(.auth-v2),
+    #root:has(.auth-v2) {
+      overflow-x: hidden !important;
+      overflow-x: clip !important;
+      overscroll-behavior-x: none;
+    }
+
     body:has(.auth-v2) {
       -webkit-text-size-adjust: 100% !important;
       text-size-adjust: 100% !important;
+      touch-action: pan-y pinch-zoom !important;
+    }
+
+    #root:has(.auth-v2) {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .auth-v2 {
