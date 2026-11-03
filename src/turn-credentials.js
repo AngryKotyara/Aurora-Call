@@ -49,13 +49,15 @@ export async function refreshTurnCredentials({ force = false } = {}) {
   if (refreshInFlight) return refreshInFlight;
 
   refreshInFlight = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
     try {
       const response = await fetch(
         `${config.functionsBaseUrl}aurora-turn-credentials`,
         {
           method: "POST",
+          signal: controller.signal,
           headers: {
-            apikey: config.supabasePublishableKey,
             "Content-Type": "application/json",
             "X-Client-Info": "aurora-call-turn/1",
           },
@@ -75,6 +77,7 @@ export async function refreshTurnCredentials({ force = false } = {}) {
       console.warn("TURN credentials unavailable", error);
       return false;
     } finally {
+      clearTimeout(timeout);
       refreshInFlight = null;
     }
   })();

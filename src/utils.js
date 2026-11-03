@@ -22,7 +22,11 @@ export function isValidUsername(username) {
   if (value.length < 3 || value.length > 24) return false;
   // Avoid Unicode property escapes here: older Android WebViews/Chrome builds
   // can fail while parsing the whole module before login/registration starts.
-  return !/[\s<>"'`\\/]/.test(value);
+  try {
+    return new RegExp("^[\\p{L}\\p{N}_]{3,24}$", "u").test(value);
+  } catch {
+    return /^[a-zA-Z0-9_\u0400-\u04ff]{3,24}$/.test(value);
+  }
 }
 
 function utf8Bytes(value) {

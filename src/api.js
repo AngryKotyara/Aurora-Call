@@ -82,7 +82,7 @@ export async function rpc(functionName, body, policy = {}) {
       },
       body: JSON.stringify(body),
     },
-    { retries: policy.retries ?? 1, timeoutMs: policy.timeoutMs ?? 15000 },
+    { retries: policy.retries ?? (/^(list_|get_|poll_)/.test(functionName) ? 1 : 0), timeoutMs: policy.timeoutMs ?? 15000 },
   );
 
   const responseBody = await response.text();

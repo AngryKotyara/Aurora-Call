@@ -16,6 +16,7 @@ import {
   migrateLegacySession,
   saveSession,
   state,
+  waitForLogout,
 } from "./state.js";
 import { renderAuth, renderInvite, renderMain } from "./ui.js";
 import { isValidUsername, query, showToast } from "./utils.js";
@@ -81,6 +82,8 @@ async function register(username, email) {
   } catch (error) {
     const messages = {
       invalid_email: "Введите корректный адрес электронной почты",
+      invalid_username: "Имя: 3–24 буквы, цифры или _",
+      registration_unavailable: "Имя пользователя или почта уже используются",
       username_taken: "Имя пользователя уже занято",
       email_taken: "Эта почта уже используется",
       rate_limited: "Слишком много попыток. Попробуйте позже",
@@ -94,13 +97,14 @@ async function register(username, email) {
 
 async function login(username, accessKey) {
   try {
+    await waitForLogout();
     const session = await loginByAccessKey(username, accessKey);
     saveSession(session);
     expiredSessionHandled = false;
     await render();
     await acceptInviteFromUrl();
-  } catch {
-    showToast("Неверное имя или ключ");
+  } catch (error) {
+    showToast(error.message === "invalid_credentials" ? "Неверное имя или ключ" : "Не удалось войти. Проверьте соединение и попробуйте снова");
   }
 }
 

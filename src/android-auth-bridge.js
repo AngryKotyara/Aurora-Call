@@ -1,3 +1,4 @@
+import { isValidUsername, showToast } from "./utils.js";
 // Android-safe authentication interactions.
 // Uses delegated events so DOM rebuilds/moves cannot detach working controls.
 function shell() {
@@ -35,7 +36,8 @@ function nextRegistrationStep() {
   const root = shell();
   if (!root) return;
   const username = root.querySelector("#register-name")?.value?.trim() || "";
-  if (!username) {
+  if (!isValidUsername(username)) {
+    showToast("Имя: 3–24 буквы, цифры или _");
     root.querySelector("#register-name")?.focus();
     return;
   }
@@ -123,6 +125,11 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   const root = shell();
   if (!root || !root.contains(event.target)) return;
+  if (event.target?.id === "register-name") {
+    event.preventDefault();
+    nextRegistrationStep();
+    return;
+  }
   if (event.target?.id === "login-name" || event.target?.id === "access") {
     event.preventDefault();
     document.dispatchEvent(

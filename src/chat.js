@@ -21,8 +21,11 @@ let hasThreadCache = false;
 let lastConversationSignature = "";
 let editingMessage = null;
 let currentMessages = new Map();
+let olderMessages = [];
+let hasOlderMessages = false;
+let sessionGeneration = 0;
 const mediaCache = new Map();
-const MAX_MEDIA_BYTES = 1024 * 1024 * 1024;
+const MAX_MEDIA_BYTES = 250 * 1024 * 1024;
 
 function icon(name) {
   const paths = {
@@ -144,7 +147,7 @@ function formatThreadTime(value) {
       }).format(date);
 }
 async function getThreads({ allowCache = false } = {}) {
-  const token = state.session?.token || "";
+  const token = state.session?.user_id ? `${state.session.user_id}:${sessionGeneration}` : "";
   if (!token) {
     cachedThreads = [];
     cachedThreadToken = "";
@@ -159,9 +162,9 @@ async function getThreads({ allowCache = false } = {}) {
   if (allowCache && hasThreadCache) return cachedThreads;
   if (threadFetchInFlight?.token === token) return threadFetchInFlight.promise;
   const pending = { token, promise: null };
-  pending.promise = rpc("list_chat_threads", { p_token: token })
+  pending.promise = rpc("list_chat_threads", { p_token: state.session.token })
     .then((threads) => {
-      if (state.session?.token !== token || cachedThreadToken !== token)
+      if (`${state.session?.user_id}:${sessionGeneration}` !== token || cachedThreadToken !== token)
         return [];
       cachedThreads = Array.isArray(threads) ? threads : [];
       hasThreadCache = true;
@@ -194,10 +197,13 @@ async function openChat(friend = null) {
   layer.hidden = false;
   document.body.classList.add("chat-active");
   if (friend) {
-    if (friend.id !== openedFriend?.id)
+    if (friend.id !== openedFriend?.id) {
+      olderMessages = [];
+      hasOlderMessages = false;
       lastConversationSignature = conversationSignature(
         cachedThreads.find((thread) => thread.friend_id === friend.id),
       );
+    }
     openedFriend = friend;
   }
   scheduleBadgeRefresh();
@@ -268,13 +274,13 @@ function messageMarkup(message) {
   return `<article class="chat-bubble ${incoming ? "incoming" : "outgoing"}" data-message-id="${message.id}" data-message-own="${incoming ? "false" : "true"}" data-message-kind="${escapeHtml(message.kind || "text")}">${mediaMarkup(message)}${body}<div class="chat-message-meta">${edited}<time>${formatTime(message.created_at)}</time>${incoming ? "" : `<span class="chat-checks ${message.read_at ? "read" : ""}">✓✓</span>`}</div></article>`;
 }
 
-async function loadMessages() {
+async function loadMessages(before = null) {
   if (!openedFriend || !state.session) return [];
   try {
     const rows = await rpc("list_chat_messages", {
       p_token: state.session.token,
       p_friend: openedFriend.id,
-      p_before: null,
+      p_before: before,
       p_limit: 80,
     });
     return rows.reverse();
@@ -491,9 +497,22 @@ function installLongPressActions() {
 async function renderConversation() {
   const layer = document.querySelector("#chat-layer");
   if (!layer || !openedFriend) return;
+  const friendId = openedFriend.id;
+  const generation = sessionGeneration;
   closeMessageMenu();
-  editingMessage = null;
-  const messages = await loadMessages();
+  const latestMessages = await loadMessages();
+  if (!openedFriend || openedFriend.id !== friendId || generation !== sessionGeneration || layer.hidden) return;
+  if (editingMessage) return;
+  const previousInput = layer.querySelector('.chat-input');
+  const draft = previousInput?.value || '';
+  const focused = document.activeElement === previousInput;
+  const selection = focused ? [previousInput.selectionStart, previousInput.selectionEnd] : null;
+  const previousScroll = layer.querySelector('.chat-messages');
+  const wasNearBottom = !previousScroll || previousScroll.scrollHeight - previousScroll.scrollTop - previousScroll.clientHeight < 80;
+  const scrollTop = previousScroll?.scrollTop || 0;
+  if (!olderMessages.length) hasOlderMessages = latestMessages.length === 80;
+  const latestIds = new Set(latestMessages.map(message => String(message.id)));
+  const messages = [...olderMessages.filter(message => !latestIds.has(String(message.id))), ...latestMessages];
   hasThreadCache = false;
   scheduleBadgeRefresh(0);
   currentMessages = new Map(
@@ -501,8 +520,31 @@ async function renderConversation() {
   );
   layer.innerHTML = `<section class="chat-shell chat-conversation-view"><header class="chat-conversation-header"><button class="chat-icon-btn" data-chat-back aria-label="Назад">${icon("back")}</button><span class="chat-avatar small">${escapeHtml(openedFriend.name?.[0]?.toUpperCase() || "?")}</span><div class="chat-peer"><b>${escapeHtml(openedFriend.name)}</b><span>личный чат</span></div><div class="chat-header-actions"><button class="chat-call-shortcut" data-chat-call="audio" title="Аудиозвонок">☎</button><button class="chat-call-shortcut" data-chat-call="video" title="Видеозвонок">▣</button></div></header><div class="chat-messages">${messages.length ? messages.map(messageMarkup).join("") : '<div class="chat-empty-conversation">Напишите первое сообщение</div>'}</div><form class="chat-composer"><input class="chat-file" type="file" accept="image/*,video/*" hidden><button type="button" class="chat-icon-btn attach" data-chat-attach aria-label="Прикрепить фото или видео">${icon("attach")}</button><textarea class="chat-input" rows="1" maxlength="4000" placeholder="Сообщение" aria-label="Сообщение"></textarea><button class="chat-send" aria-label="Отправить">${icon("send")}</button></form></section>`;
   const messagesEl = layer.querySelector(".chat-messages");
+  if (hasOlderMessages && messages.length) {
+    const loadMore = document.createElement('button');
+    loadMore.type = 'button';
+    loadMore.className = 'btn ghost';
+    loadMore.textContent = 'Загрузить более ранние сообщения';
+    messagesEl.prepend(loadMore);
+    loadMore.onclick = async () => {
+      loadMore.disabled = true;
+      const previousHeight = messagesEl.scrollHeight;
+      const older = await loadMessages(messages[0].created_at);
+      if (!openedFriend || openedFriend.id !== friendId || generation !== sessionGeneration || !messagesEl.isConnected) return;
+      hasOlderMessages = older.length === 80;
+      const known = new Set(messages.map(message => String(message.id)));
+      const unique = older.filter(message => !known.has(String(message.id)));
+      olderMessages = [...unique, ...olderMessages];
+      unique.forEach(message => currentMessages.set(String(message.id), message));
+      loadMore.insertAdjacentHTML('afterend', unique.map(messageMarkup).join(''));
+      if (!hasOlderMessages) loadMore.remove(); else loadMore.disabled = false;
+      messagesEl.scrollTop += messagesEl.scrollHeight - previousHeight;
+      installLongPressActions();
+      void hydrateMedia();
+    };
+  }
   requestAnimationFrame(() => {
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    messagesEl.scrollTop = wasNearBottom ? messagesEl.scrollHeight : scrollTop;
   });
   const returnToThreads = () => {
     openedFriend = null;
@@ -525,6 +567,11 @@ async function renderConversation() {
     void sendText();
   };
   const input = layer.querySelector(".chat-input");
+  input.value = draft;
+  if (focused) {
+    input.focus();
+    if (selection) input.setSelectionRange?.(...selection);
+  }
   input.onkeydown = (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -592,7 +639,8 @@ async function sendText() {
     await renderConversation();
   } catch (error) {
     optimistic.remove();
-    input.value = text;
+    const currentInput = document.querySelector('.chat-input');
+    if (currentInput) currentInput.value = currentInput.value ? `${text}\n${currentInput.value}` : text;
     console.error(error);
     showToast("Не удалось отправить сообщение");
   }
@@ -642,7 +690,7 @@ async function sendMedia(file) {
   if (!file.type.startsWith("image/") && !file.type.startsWith("video/"))
     return showToast("Можно отправлять фото и видео");
   if (file.size > MAX_MEDIA_BYTES)
-    return showToast("Файл слишком большой. Максимум 1 ГБ");
+    return showToast("Файл слишком большой. Максимум 250 МБ");
   const upload = createUploadBubble(file);
   let fakeProgress = null;
   try {
@@ -767,6 +815,21 @@ export function initChat() {
     "aurora-chat-open",
     (event) => void openChat(event.detail || null),
   );
+  document.addEventListener('aurora-session-cleared', () => {
+    sessionGeneration += 1;
+    cachedThreads = [];
+    cachedThreadToken = '';
+    hasThreadCache = false;
+    threadFetchInFlight = null;
+    olderMessages = [];
+    hasOlderMessages = false;
+    currentMessages.clear();
+    mediaCache.forEach(url => { if (url?.startsWith?.('blob:')) URL.revokeObjectURL(url); });
+    mediaCache.clear();
+    closeChat();
+    const layer = document.querySelector('#chat-layer');
+    if (layer) layer.innerHTML = '';
+  });
   document.addEventListener("visibilitychange", () =>
     scheduleBadgeRefresh(document.visibilityState === "hidden" ? undefined : 0),
   );

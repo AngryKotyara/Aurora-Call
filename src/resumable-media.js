@@ -5,9 +5,9 @@ import { escapeHtml, showToast } from "./utils.js";
 
 const EDGE_URL = `${config.functionsBaseUrl}aurora-chat-media`;
 const CHUNK_SIZE = 6 * 1024 * 1024;
-const MAX_BYTES = 1024 * 1024 * 1024;
+const MAX_BYTES = 250 * 1024 * 1024;
 const RETRIES = [0, 1000, 3000, 5000, 10000, 20000];
-const FINALIZE_RETRIES = [0, 300, 800, 1600, 3000];
+const FINALIZE_RETRIES = [0];
 
 let activeFriend = null;
 let inputObserver = null;
@@ -300,7 +300,7 @@ export async function handleResumableMedia(file) {
     return;
   }
   if (file.size > MAX_BYTES) {
-    showToast("Файл слишком большой. Максимум 1 ГБ");
+    showToast("Файл слишком большой. Максимум 250 МБ");
     return;
   }
 

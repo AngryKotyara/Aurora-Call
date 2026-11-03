@@ -54,15 +54,14 @@ export async function migrateLegacySession() {
   }
 }
 
+let logoutPending = Promise.resolve();
+
+export function waitForLogout() {
+  return logoutPending;
+}
+
 export function clearSession() {
-  const markOffline = state.session
-    ? fetch("/api/rpc/touch_call_presence", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        keepalive: true,
-        body: JSON.stringify({ p_friend: null, p_activity: "offline" }),
-      }).catch(() => {})
-    : Promise.resolve();
+  const hadSession = Boolean(state.session);
 
   state.session = null;
   state.friends = [];
@@ -71,11 +70,17 @@ export function clearSession() {
   state.lastSignalId = 0;
   localStorage.removeItem(config.sessionStorageKey);
   void setAppBadgeCount(0);
-  void markOffline.finally(() =>
-    fetch("/api/auth-logout", {
+  if (typeof document !== "undefined")
+    document.dispatchEvent(new CustomEvent("aurora-session-cleared"));
+  if (hadSession) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    logoutPending = fetch("/api/auth-logout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       keepalive: true,
-    }).catch(() => {}),
-  );
+      signal: controller.signal,
+    }).catch(() => {}).finally(() => clearTimeout(timer));
+  }
+  return logoutPending;
 }

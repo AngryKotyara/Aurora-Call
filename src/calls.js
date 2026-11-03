@@ -1,5 +1,6 @@
 import { rpc } from "./api.js";
 import { config } from "./config.js";
+import { refreshTurnCredentials } from "./turn-credentials.js";
 import {
   notifyAndroidCallActive,
   notifyAndroidCallEnded,
@@ -285,6 +286,7 @@ async function callFriend(mode) {
   if (!friend || !state.session) return;
   try {
     await prepareLocalMedia(mode);
+    await refreshTurnCredentials();
     const callId = await rpc("start_call", {
       p_token: state.session.token,
       p_to: friend.id,
@@ -323,6 +325,7 @@ async function acceptIncoming(call) {
   state.selectedFriend = { id: call.from_id, name: call.from_name };
   try {
     await prepareLocalMedia(call.mode);
+    await refreshTurnCredentials();
     const screenShare = getScreenShareSupport();
     renderCallModal({
       friendName: call.from_name,
