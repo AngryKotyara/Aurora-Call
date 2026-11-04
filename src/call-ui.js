@@ -83,6 +83,27 @@ export function setCallConnectionState(connectionState) {
   status.textContent = copy[normalized] || "Соединение…";
 }
 
+export function setCallVerificationCode(code) {
+  const container = query("#call-security");
+  const button = query("#call-security-button");
+  const panel = query("#call-security-panel");
+  const value = query("#call-security-code");
+  if (!container || !button || !panel || !value) return;
+  if (!code) {
+    container.hidden = true;
+    panel.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    value.textContent = "";
+    return;
+  }
+  if (value.textContent !== code) {
+    panel.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  }
+  value.textContent = code;
+  container.hidden = false;
+}
+
 function makePreviewDraggable(preview, boundary) {
   let drag = null;
   const margin = 12;
@@ -185,6 +206,7 @@ export function renderCallModal({
   canShareScreen = true,
   screenShareUnavailableReason = "Демонстрация экрана недоступна",
   onScreenShareUnavailable = () => {},
+  showCallSecurity = false,
   onHangup,
 }) {
   removeCallModal();
@@ -196,6 +218,23 @@ export function renderCallModal({
     "beforeend",
     `<div class="modal call-screen ${isVideo ? "video-call" : "audio-call"}" id="call-modal" role="dialog" aria-modal="true" aria-labelledby="call-peer-name" data-connection="connecting" data-local-screen-sharing="false" data-remote-screen-sharing="false"><div class="call-stage"><video id="remote-video" class="remote-video" autoplay playsinline aria-label="Видео собеседника"></video><div class="call-audio-backdrop" aria-hidden="true"><span class="call-audio-avatar">${initial}</span></div></div><div class="call-shade" aria-hidden="true"></div><header class="call-header"><h2 id="call-peer-name">${safeName}</h2><p><span class="connection-dot" aria-hidden="true"></span><span id="call-status">Соединение…</span> · ${isVideo ? "видео" : "аудио"}</p></header><div id="screen-share-status" class="screen-share-status" role="status" hidden><span class="screen-share-dot" aria-hidden="true"></span><span id="screen-share-status-text">Вы показываете экран</span></div>${isVideo ? `<div id="local-preview" class="local-preview" role="group" tabindex="0" aria-label="Ваше видео. Перетащите, чтобы изменить положение"><video id="local-video" autoplay muted playsinline></video><div class="local-preview-off" aria-hidden="true">${callControlIcon("camera")}<span>Камера выключена</span></div><span class="local-preview-grip" aria-hidden="true"></span></div>` : '<video id="local-video" class="audio-local-video" autoplay muted playsinline></video>'}<div class="controls" aria-label="Управление звонком"><button id="toggle-mic" class="media-control" type="button" data-enabled="true" aria-pressed="false" aria-label="Выключить микрофон"><span class="control-icon">${callControlIcon("microphone")}</span><span class="control-state" aria-hidden="true"></span></button>${isVideo ? `<button id="toggle-camera" class="media-control" type="button" data-enabled="true" aria-pressed="false" aria-label="Выключить камеру"><span class="control-icon">${callControlIcon("camera")}</span><span class="control-state" aria-hidden="true"></span></button><button id="toggle-screen-share" class="screen-share-control ${canShareScreen ? "" : "is-unavailable"}" type="button" data-active="false" aria-pressed="false" aria-disabled="${String(!canShareScreen)}" aria-label="${canShareScreen ? "Начать демонстрацию экрана" : unavailableReason}"><span class="control-icon">${callControlIcon("screen")}</span><span class="control-state" aria-hidden="true"></span></button>` : ""}<button id="hangup" class="danger hangup-control" type="button" aria-label="Завершить звонок"><span class="control-icon">${endCallIcon()}</span></button></div>${isVideo && !canShareScreen ? `<p class="screen-share-unavailable" role="note">${unavailableReason}</p>` : ""}</div>`,
   );
+  if (showCallSecurity) {
+    query("#call-modal .call-header p")?.insertAdjacentHTML(
+      "beforeend",
+      `<span id="call-security" class="call-security" hidden><button id="call-security-button" class="call-security-button" type="button" aria-controls="call-security-panel" aria-expanded="false">Код звонка</button></span>`,
+    );
+    query("#call-modal .call-header")?.insertAdjacentHTML(
+      "beforeend",
+      `<div id="call-security-panel" class="call-security-panel" hidden><strong>Код безопасности</strong><span id="call-security-code" class="call-security-code"></span><span>Сравните код с собеседником по другому доверенному каналу. Код доступен при звонке через сайт.</span></div>`,
+    );
+    query("#call-security-button")?.addEventListener("click", () => {
+      const panel = query("#call-security-panel");
+      const button = query("#call-security-button");
+      if (!panel || !button) return;
+      panel.hidden = !panel.hidden;
+      button.setAttribute("aria-expanded", String(!panel.hidden));
+    });
+  }
   document.body.classList.add("call-active");
   const microphoneButton = query("#toggle-mic");
   const cameraButton = query("#toggle-camera");

@@ -13,10 +13,41 @@ globalThis.window = window;
 const {
   renderCallModal,
   removeCallModal,
+  setCallVerificationCode,
   setRemoteScreenShareActive,
   setScreenShareActive,
 } = await import("../src/call-ui.js");
 const { renderMain } = await import("../src/ui.js");
+
+test("optional call code appears only after a code is available and clears on disconnect", () => {
+  renderCallModal({
+    friendName: "Peer",
+    mode: "audio",
+    showCallSecurity: true,
+    onToggleMic: () => true,
+    onToggleCamera: () => true,
+    onHangup: () => {},
+  });
+  const control = document.querySelector("#call-security");
+  const button = document.querySelector("#call-security-button");
+  const panel = document.querySelector("#call-security-panel");
+  assert.equal(control.hidden, true);
+  setCallVerificationCode("1234 5678 9012");
+  assert.equal(control.hidden, false);
+  assert.equal(panel.hidden, true);
+  button.click();
+  assert.equal(panel.hidden, false);
+  assert.equal(button.getAttribute("aria-expanded"), "true");
+  assert.equal(
+    document.querySelector("#call-security-code").textContent,
+    "1234 5678 9012",
+  );
+  setCallVerificationCode(null);
+  assert.equal(control.hidden, true);
+  assert.equal(panel.hidden, true);
+  assert.equal(document.querySelector("#call-security-code").textContent, "");
+  removeCallModal();
+});
 
 test("main screen renders the logo, waves, history, and friend removal controls", () => {
   const navigation = [];

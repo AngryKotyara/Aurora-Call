@@ -1,7 +1,12 @@
 import { rpc } from "./api.js";
 import { config } from "./config.js";
 import { refreshTurnCredentials } from "./turn-credentials.js";
-import { hasTurnServer, relayOnlyEnabled } from "./call-privacy.js";
+import {
+  hasTurnServer,
+  isNativeApp,
+  relayOnlyEnabled,
+} from "./call-privacy.js";
+import { callFingerprintPair, callVerificationCode } from "./call-security.js";
 import {
   notifyAndroidCallActive,
   notifyAndroidCallEnded,
@@ -20,6 +25,7 @@ import {
   removeCallModal,
   renderCallModal,
   setCallConnectionState,
+  setCallVerificationCode,
   setRemoteScreenShareActive,
   setScreenShareActive,
 } from "./call-ui.js";
@@ -34,6 +40,54 @@ let pushedCallInFlight = null;
 const pendingSignals = new Map();
 const MAX_PENDING_CALLS = 20;
 const MAX_SIGNALS_PER_CALL = 100;
+let verificationPeer = null;
+let verificationFingerprints = null;
+
+async function updateCallVerificationCode(peer) {
+  if (!peer || isNativeApp() || state.peer !== peer) return;
+  const local = peer.localDescription?.sdp;
+  const remote = peer.remoteDescription?.sdp;
+  if (peer.connectionState !== "connected" || !local || !remote) {
+    verificationPeer = null;
+    verificationFingerprints = null;
+    setCallVerificationCode(null);
+    return;
+  }
+  const fingerprints = callFingerprintPair(local, remote);
+  if (!fingerprints) {
+    verificationPeer = null;
+    verificationFingerprints = null;
+    setCallVerificationCode(null);
+    return;
+  }
+  if (verificationPeer !== peer || verificationFingerprints !== fingerprints) {
+    setCallVerificationCode(null);
+    verificationPeer = peer;
+    verificationFingerprints = fingerprints;
+  }
+  try {
+    const code = await callVerificationCode(local, remote);
+    if (
+      state.peer === peer &&
+      peer.connectionState === "connected" &&
+      verificationPeer === peer &&
+      verificationFingerprints === fingerprints &&
+      callFingerprintPair(
+        peer.localDescription?.sdp,
+        peer.remoteDescription?.sdp,
+      ) === fingerprints
+    ) {
+      setCallVerificationCode(code);
+    }
+  } catch {
+    if (
+      state.peer === peer &&
+      verificationPeer === peer &&
+      verificationFingerprints === fingerprints
+    )
+      setCallVerificationCode(null);
+  }
+}
 
 export function getScreenShareSupport(browser = globalThis.navigator) {
   if (isIOSNativeScreenShareAvailable()) return { available: true, reason: "" };
@@ -280,9 +334,13 @@ function createPeer() {
   };
   peer.onicecandidate = (event) => {
     if (event.candidate) void sendSignal("ice", event.candidate.toJSON());
+    void updateCallVerificationCode(peer);
   };
-  peer.onconnectionstatechange = () =>
+  peer.onsignalingstatechange = () => void updateCallVerificationCode(peer);
+  peer.onconnectionstatechange = () => {
     setCallConnectionState(peer.connectionState || peer.iceConnectionState);
+    void updateCallVerificationCode(peer);
+  };
   peer.oniceconnectionstatechange = () => {
     if (!peer.connectionState || peer.connectionState === "new") {
       setCallConnectionState(peer.iceConnectionState);
@@ -333,6 +391,7 @@ async function callFriend(mode) {
       canShareScreen: screenShare.available,
       screenShareUnavailableReason: screenShare.reason,
       onScreenShareUnavailable: () => showToast(screenShare.reason),
+      showCallSecurity: !isNativeApp(),
       onHangup: () => void hangupCall(),
     });
     notifyAndroidCallActive({ callId, peerName: friend.name, mode });
@@ -369,6 +428,7 @@ async function acceptIncoming(call) {
       canShareScreen: screenShare.available,
       screenShareUnavailableReason: screenShare.reason,
       onScreenShareUnavailable: () => showToast(screenShare.reason),
+      showCallSecurity: !isNativeApp(),
       onHangup: () => void hangupCall(),
     });
     notifyAndroidCallActive({
@@ -470,10 +530,13 @@ async function processSignal(signal) {
       const answer = await state.peer.createAnswer();
       await state.peer.setLocalDescription(answer);
       await sendSignal("answer", answer);
+      void updateCallVerificationCode(state.peer);
     } else if (signal.kind === "answer") {
       await state.peer.setRemoteDescription(signal.payload);
+      void updateCallVerificationCode(state.peer);
     } else if (signal.kind === "ice" || signal.kind === "candidate") {
       await state.peer.addIceCandidate(signal.payload);
+      void updateCallVerificationCode(state.peer);
     } else if (signal.kind === "screen-share") {
       setRemoteScreenShareActive(Boolean(signal.payload?.active));
     } else if (signal.kind === "hangup" || signal.kind === "decline") {

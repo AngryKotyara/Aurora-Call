@@ -358,3 +358,61 @@ test("a call push opens the matching active incoming call", async () => {
   await new Promise((resolve) => setImmediate(resolve));
   incomingCalls = [];
 });
+
+test("website displays a call code only for a connected peer and hides it on disconnect", async () => {
+  state.session = { token: "receiver-token", username: "volna_preview" };
+  state.selectedFriend = {
+    id: "00000000-0000-4000-8000-0000000000e5",
+    name: "Peer",
+  };
+  await startCall("audio");
+  const peer = state.peer;
+  const fingerprint = (byte) => Array(32).fill(byte).join(":");
+  peer.localDescription = {
+    sdp: `v=0\r\na=fingerprint:sha-256 ${fingerprint("AA")}\r\n`,
+  };
+  peer.remoteDescription = {
+    sdp: `v=0\r\na=fingerprint:sha-256 ${fingerprint("BB")}\r\n`,
+  };
+  peer.connectionState = "connected";
+  peer.onconnectionstatechange();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(document.querySelector("#call-security").hidden, false);
+  assert.match(
+    document.querySelector("#call-security-code").textContent,
+    /^\d{4} \d{4} \d{4}$/,
+  );
+  const oldCode = document.querySelector("#call-security-code").textContent;
+  peer.remoteDescription = {
+    sdp: `v=0\r\na=fingerprint:sha-256 ${fingerprint("CC")}\r\n`,
+  };
+  peer.onsignalingstatechange();
+  assert.equal(document.querySelector("#call-security").hidden, true);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(document.querySelector("#call-security").hidden, false);
+  assert.notEqual(
+    document.querySelector("#call-security-code").textContent,
+    oldCode,
+  );
+  peer.connectionState = "disconnected";
+  peer.onconnectionstatechange();
+  assert.equal(document.querySelector("#call-security").hidden, true);
+  await hangupCall();
+});
+
+test("native wrappers do not receive the website-only call code control", async () => {
+  const original = navigator.userAgent;
+  navigator.userAgent = "AuroraCallAndroid/1.3.1";
+  try {
+    state.session = { token: "receiver-token", username: "volna_preview" };
+    state.selectedFriend = {
+      id: "00000000-0000-4000-8000-0000000000e5",
+      name: "Peer",
+    };
+    await startCall("audio");
+    assert.equal(document.querySelector("#call-security"), null);
+    await hangupCall();
+  } finally {
+    navigator.userAgent = original;
+  }
+});
