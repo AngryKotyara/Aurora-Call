@@ -1,13 +1,18 @@
 import { rpc } from "./api.js";
 import { setAppBadgeCount } from "./app-badge.js";
 import {
-  LEGACY_MEDIA_FRAME_SELECTOR,
-  mediaRoutingAttribute,
-} from "./chat-media-routing.js";
+  clearMediaCache,
+  hydrateMedia,
+  removeCachedMedia,
+} from "./chat/media.js";
+import { sendMedia } from "./chat/upload.js";
+import { icon, threadRow, renderMessageMarkup } from "./chat/markup.js";
 import { installChatEdgeSwipe } from "./chat-edge-swipe.js";
 import { chatPollDelay } from "./polling-policy.js";
 import { state } from "./state.js";
 import { escapeHtml, showToast } from "./utils.js";
+
+export { mediaMarkup } from "./chat/markup.js";
 
 let openedFriend = null;
 let pollTimer = null;
@@ -24,28 +29,6 @@ let currentMessages = new Map();
 let olderMessages = [];
 let hasOlderMessages = false;
 let sessionGeneration = 0;
-const mediaCache = new Map();
-const MAX_MEDIA_BYTES = 250 * 1024 * 1024;
-
-function icon(name) {
-  const paths = {
-    chat: '<path d="M4 5.5A3.5 3.5 0 0 1 7.5 2h9A3.5 3.5 0 0 1 20 5.5v6a3.5 3.5 0 0 1-3.5 3.5H10l-5 4v-4.6A3.5 3.5 0 0 1 4 12z"/>',
-    back: '<path d="m15 18-6-6 6-6"/>',
-    attach:
-      '<path d="M8.5 12.5 14 7a3 3 0 0 1 4.2 4.2l-7.1 7.1a5 5 0 0 1-7.1-7.1l7.2-7.2"/>',
-    send: '<path d="m3 11 17-8-7.5 18-2-7.5zM10.5 13.5 20 3"/>',
-    close: '<path d="m6 6 12 12M18 6 6 18"/>',
-    edit: '<path d="m4 20 4.2-1 10.9-10.9a2.1 2.1 0 0 0-3-3L5.2 16zM14.8 6.4l3 3"/>',
-    trash: '<path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5M14 11v5"/>',
-    home: '<path d="m3.5 10 8.5-7 8.5 7v9.5a1.5 1.5 0 0 1-1.5 1.5h-4.5v-7h-5v7H5a1.5 1.5 0 0 1-1.5-1.5z"/>',
-    history: '<path d="M4 5v5h5M5.3 9A8 8 0 1 1 4 13M12 7v5l3 2"/>',
-    friends:
-      '<path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-1a3.5 3.5 0 1 0 0-7M2 21a6 6 0 0 1 12 0m1-7a5 5 0 0 1 7 4.6"/>',
-    settings:
-      '<path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2Zm0-5.2 1 .3.7 2.1 1.5.6 2-1 1 .7-.2 2.3 1.1 1.1 2.2.2.4 1.2-1.7 1.6v1.6l1.7 1.6-.4 1.2-2.2.2-1.1 1.1.2 2.3-1 .7-2-1-1.5.6-.7 2.1-1 .3-1.4-1.8H9.8L8.4 22l-1-.3-.7-2.1-1.5-.6-2 1-1-.7.2-2.3L1.3 16l-2.2-.2-.4-1.2L.4 13v-1.6L-1.3 9.8-.9 8.6l2.2-.2 1.1-1.1-.2-2.3 1-.7 2 1 1.5-.6.7-2.1 1-.3L9.8 4h1.6z"/>',
-  };
-  return `<svg class="aurora-nav-icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
-}
 
 function addMessageButton(container, friend) {
   if (!container || container.querySelector("[data-message-friend]")) return;
@@ -127,25 +110,6 @@ function ensureShell() {
   ensureFriendMessageActions();
 }
 
-function formatTime(value) {
-  return value
-    ? new Intl.DateTimeFormat("ru", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date(value))
-    : "";
-}
-function formatThreadTime(value) {
-  if (!value) return "";
-  const date = new Date(value),
-    now = new Date();
-  return date.toDateString() === now.toDateString()
-    ? formatTime(value)
-    : new Intl.DateTimeFormat("ru", {
-        day: "2-digit",
-        month: "2-digit",
-      }).format(date);
-}
 async function getThreads({ allowCache = false } = {}) {
   const token = state.session?.user_id ? `${state.session.user_id}:${sessionGeneration}` : "";
   if (!token) {
@@ -176,13 +140,6 @@ async function getThreads({ allowCache = false } = {}) {
     });
   threadFetchInFlight = pending;
   return pending.promise;
-}
-
-function threadRow(thread) {
-  const initial = escapeHtml(thread.username?.[0]?.toUpperCase() || "?");
-  const preview = escapeHtml(thread.last_message || "Начните переписку");
-  const unread = Number(thread.unread_count || 0);
-  return `<button class="chat-thread" data-chat-friend="${escapeHtml(thread.friend_id)}" data-chat-name="${escapeHtml(thread.username)}"><span class="chat-avatar">${initial}</span><span class="chat-thread-main"><span class="chat-thread-top"><b>${escapeHtml(thread.username)}</b><time>${formatThreadTime(thread.last_at)}</time></span><span class="chat-thread-bottom"><span>${preview}</span>${unread ? `<strong class="chat-unread">${unread > 99 ? "99+" : unread}</strong>` : ""}</span></span></button>`;
 }
 
 function conversationSignature(thread) {
@@ -217,8 +174,7 @@ function closeChat() {
   const layer = document.querySelector("#chat-layer");
   if (layer) layer.hidden = true;
   document.body.classList.remove("chat-active");
-  mediaCache.forEach(url => { if (url?.startsWith?.('blob:')) URL.revokeObjectURL(url); });
-  mediaCache.clear();
+  clearMediaCache();
   scheduleBadgeRefresh();
 }
 
@@ -246,34 +202,8 @@ async function renderThreads() {
     );
 }
 
-export function mediaMarkup(message) {
-  if (!message.media_data) return "";
-  const name = escapeHtml(
-    message.media_name || (message.kind === "image" ? "Фото" : "Видео"),
-  );
-  const direct =
-    message.media_data.startsWith("data:") ||
-    message.media_data.startsWith("http");
-  const directAttr = direct
-    ? ` data-direct-src="${escapeHtml(message.media_data)}"`
-    : "";
-  const routingAttr = mediaRoutingAttribute(message.media_data);
-  if (message.kind === "image")
-    return `<button class="chat-media-open chat-media-frame" data-chat-media-id="${message.id}" data-media-kind="image" data-media-name="${name}"${directAttr}${routingAttr}><div class="chat-media-skeleton"><span class="chat-media-spinner"></span><small>Загрузка фото…</small></div><img alt="${name}" loading="eager" hidden></button>`;
-  if (message.kind === "video")
-    return `<div class="chat-media-frame chat-video-frame" data-chat-media-id="${message.id}" data-media-kind="video" data-media-name="${name}"${directAttr}${routingAttr}><div class="chat-media-skeleton"><span class="chat-media-spinner"></span><small>Загрузка видео…</small></div><video class="chat-video" controls playsinline preload="metadata" hidden></video></div>`;
-  return "";
-}
-
 function messageMarkup(message) {
-  const incoming = message.sender_id === openedFriend?.id;
-  const body = message.body
-    ? `<div class="chat-message-text">${escapeHtml(message.body)}</div>`
-    : "";
-  const edited = message.edited_at
-    ? '<span class="chat-edited">изменено</span>'
-    : "";
-  return `<article class="chat-bubble ${incoming ? "incoming" : "outgoing"}" data-message-id="${message.id}" data-message-own="${incoming ? "false" : "true"}" data-message-kind="${escapeHtml(message.kind || "text")}">${mediaMarkup(message)}${body}<div class="chat-message-meta">${edited}<time>${formatTime(message.created_at)}</time>${incoming ? "" : `<span class="chat-checks ${message.read_at ? "read" : ""}">✓✓</span>`}</div></article>`;
+  return renderMessageMarkup(message, openedFriend?.id);
 }
 
 async function loadMessages(before = null) {
@@ -291,99 +221,6 @@ async function loadMessages(before = null) {
     showToast("Не удалось загрузить сообщения");
     return [];
   }
-}
-
-function base64ToBlobUrl(base64, mime) {
-  const binary = atob(base64);
-  const chunk = 64 * 1024;
-  const parts = [];
-  for (let offset = 0; offset < binary.length; offset += chunk) {
-    const slice = binary.slice(offset, offset + chunk);
-    const bytes = new Uint8Array(slice.length);
-    for (let index = 0; index < slice.length; index += 1)
-      bytes[index] = slice.charCodeAt(index);
-    parts.push(bytes);
-  }
-  return URL.createObjectURL(
-    new Blob(parts, { type: mime || "application/octet-stream" }),
-  );
-}
-
-async function resolveMedia(messageId, directSrc) {
-  if (directSrc) return directSrc;
-  if (mediaCache.has(messageId)) return mediaCache.get(messageId);
-  const result = await rpc("get_chat_media_secure", {
-    p_token: state.session.token,
-    p_message_id: Number(messageId),
-  });
-  const row = Array.isArray(result) ? result[0] : result;
-  if (!row?.media_base64 || !row?.media_mime)
-    throw new Error("media_not_found");
-  const blobUrl = base64ToBlobUrl(row.media_base64, row.media_mime);
-  mediaCache.set(messageId, blobUrl);
-  return blobUrl;
-}
-
-function showUnsupportedMedia(frame, src, name) {
-  frame.classList.add("is-unsupported");
-  frame.innerHTML = `<a class="chat-file-card" href="${escapeHtml(src)}" download="${escapeHtml(name || "media")}"><span class="chat-file-icon">↧</span><span><b>${escapeHtml(name || "Медиафайл")}</b><small>Открыть или скачать</small></span></a>`;
-}
-
-async function hydrateMedia() {
-  const frames = [
-    ...document.querySelectorAll(`#chat-layer ${LEGACY_MEDIA_FRAME_SELECTOR}`),
-  ];
-  await Promise.all(
-    frames.map(async (frame) => {
-      if (frame.dataset.hydrated === "true") return;
-      frame.dataset.hydrated = "loading";
-      try {
-        const src = await resolveMedia(
-          frame.dataset.chatMediaId,
-          frame.dataset.directSrc || "",
-        );
-        const skeleton = frame.querySelector(".chat-media-skeleton");
-        if (frame.dataset.mediaKind === "image") {
-          const img = frame.querySelector("img");
-          img.onload = () => {
-            skeleton?.remove();
-            img.hidden = false;
-            frame.dataset.mediaSrc = src;
-            frame.dataset.hydrated = "true";
-          };
-          img.onerror = () =>
-            showUnsupportedMedia(frame, src, frame.dataset.mediaName);
-          img.src = src;
-        } else {
-          const video = frame.querySelector("video");
-          video.onloadedmetadata = () => {
-            skeleton?.remove();
-            video.hidden = false;
-            frame.dataset.hydrated = "true";
-          };
-          video.onerror = () =>
-            showUnsupportedMedia(frame, src, frame.dataset.mediaName);
-          video.src = src;
-          video.load();
-        }
-      } catch (error) {
-        console.error("Failed to load chat media", error);
-        frame.dataset.hydrated = "false";
-        const label = frame.querySelector(".chat-media-skeleton small");
-        if (label)
-          label.textContent = "Не удалось загрузить — нажмите для повтора";
-        frame.onclick = () => {
-          frame.dataset.hydrated = "false";
-          void hydrateMedia();
-        };
-      }
-    }),
-  );
-  document
-    .querySelectorAll("#chat-layer .chat-media-open[data-media-src]")
-    .forEach((button) => {
-      button.onclick = () => showMediaViewer(button.dataset.mediaSrc);
-    });
 }
 
 function closeMessageMenu() {
@@ -425,11 +262,7 @@ async function deleteMessage(message) {
       p_token: state.session.token,
       p_message_id: Number(message.id),
     });
-    const cached =
-      mediaCache.get(String(message.id)) || mediaCache.get(message.id);
-    if (cached?.startsWith?.("blob:")) URL.revokeObjectURL(cached);
-    mediaCache.delete(String(message.id));
-    mediaCache.delete(message.id);
+    removeCachedMedia(message.id);
     await renderConversation();
   } catch (error) {
     console.error("Failed to delete message", error);
@@ -595,7 +428,10 @@ async function renderConversation() {
   layer.querySelector("[data-chat-attach]").onclick = () =>
     layer.querySelector(".chat-file").click();
   layer.querySelector(".chat-file").onchange = (event) =>
-    void sendMedia(event.target.files?.[0]);
+    void sendMedia(event.target.files?.[0], {
+      getOpenedFriend: () => openedFriend,
+      renderConversation,
+    });
   layer.querySelector(".chat-composer").onsubmit = (event) => {
     event.preventDefault();
     void sendText();
@@ -679,97 +515,6 @@ async function sendText() {
     console.error(error);
     showToast("Не удалось отправить сообщение");
   }
-}
-
-function readFileBase64(file, onProgress) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onprogress = (event) => {
-      if (event.lengthComputable)
-        onProgress(Math.min(65, Math.round((event.loaded / event.total) * 65)));
-    };
-    reader.onload = () => {
-      onProgress(68);
-      resolve(String(reader.result).split(",")[1]);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function createUploadBubble(file) {
-  const messagesEl = document.querySelector(".chat-messages");
-  messagesEl?.querySelector(".chat-empty-conversation")?.remove();
-  const article = document.createElement("article");
-  article.className = "chat-bubble outgoing chat-upload-bubble";
-  const preview = URL.createObjectURL(file),
-    isImage = file.type.startsWith("image/");
-  article.innerHTML = `<div class="chat-upload-preview">${isImage ? `<img src="${preview}" alt="${escapeHtml(file.name)}">` : `<video src="${preview}" muted playsinline></video>`}<div class="chat-upload-mask"><span class="chat-upload-ring" style="--p:0"><b>0%</b></span><small>Отправка ${isImage ? "фото" : "видео"}</small></div></div><div class="chat-message-meta"><span>${escapeHtml(file.name)}</span></div>`;
-  messagesEl?.append(article);
-  if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
-  return {
-    article,
-    preview,
-    update(value) {
-      const ring = article.querySelector(".chat-upload-ring");
-      if (ring) {
-        ring.style.setProperty("--p", String(value));
-        ring.querySelector("b").textContent = `${value}%`;
-      }
-    },
-  };
-}
-
-async function sendMedia(file) {
-  if (!file || !openedFriend) return;
-  if (!file.type.startsWith("image/") && !file.type.startsWith("video/"))
-    return showToast("Можно отправлять фото и видео");
-  if (file.size > MAX_MEDIA_BYTES)
-    return showToast("Файл слишком большой. Максимум 250 МБ");
-  const upload = createUploadBubble(file);
-  let fakeProgress = null;
-  try {
-    const base64 = await readFileBase64(file, (p) => upload.update(p));
-    let p = 70;
-    upload.update(p);
-    fakeProgress = window.setInterval(() => {
-      p = Math.min(94, p + Math.max(1, Math.round((95 - p) / 5)));
-      upload.update(p);
-    }, 180);
-    await rpc("upload_chat_media", {
-      p_token: state.session.token,
-      p_to: openedFriend.id,
-      p_kind: file.type.startsWith("image/") ? "image" : "video",
-      p_body: null,
-      p_media_mime: file.type,
-      p_media_name: file.name,
-      p_media_base64: base64,
-    });
-    upload.update(100);
-    await new Promise((resolve) => setTimeout(resolve, 180));
-    await renderConversation();
-  } catch (error) {
-    console.error("Failed to send chat media", error);
-    upload.article.classList.add("is-failed");
-    upload.article.querySelector(".chat-upload-mask small").textContent =
-      "Ошибка отправки";
-    showToast("Не удалось отправить файл");
-  } finally {
-    if (fakeProgress) clearInterval(fakeProgress);
-    URL.revokeObjectURL(upload.preview);
-  }
-}
-
-function showMediaViewer(src) {
-  document.body.insertAdjacentHTML(
-    "beforeend",
-    `<div class="chat-viewer" role="dialog" aria-modal="true"><button class="chat-viewer-close" aria-label="Закрыть">${icon("close")}</button><img src="${escapeHtml(src)}" alt="Просмотр фото"></div>`,
-  );
-  const viewer = document.querySelector(".chat-viewer:last-of-type");
-  viewer.onclick = (event) => {
-    if (event.target === viewer || event.target.closest(".chat-viewer-close"))
-      viewer.remove();
-  };
 }
 
 async function refreshBadge() {
@@ -861,8 +606,7 @@ export function initChat() {
     olderMessages = [];
     hasOlderMessages = false;
     currentMessages.clear();
-    mediaCache.forEach(url => { if (url?.startsWith?.('blob:')) URL.revokeObjectURL(url); });
-    mediaCache.clear();
+    clearMediaCache();
     closeChat();
     const layer = document.querySelector('#chat-layer');
     if (layer) layer.innerHTML = '';
