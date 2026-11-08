@@ -416,3 +416,38 @@ test("native wrappers do not receive the website-only call code control", async 
     navigator.userAgent = original;
   }
 });
+
+test("ICE candidates arriving before the answer are applied afterwards", async () => {
+  state.session = { token: "test-token", username: "test" };
+  state.selectedFriend = { id: "peer", name: "peer" };
+  state.lastSignalId = 0;
+  incomingCalls = [];
+  polledSignals = [];
+  await startCall("audio");
+  const peer = state.peer;
+  let attempts = 0;
+  peer.addIceCandidate = async function (candidate) {
+    attempts++;
+    assert.ok(this.remoteDescription);
+    this.iceCandidate = candidate;
+  };
+  polledSignals = [
+    {
+      id: 501,
+      call_id: state.callId,
+      kind: "ice",
+      payload: { candidate: "early" },
+    },
+    {
+      id: 502,
+      call_id: state.callId,
+      kind: "answer",
+      payload: { type: "answer", sdp: "answer" },
+    },
+  ];
+  await pollSignalsOnce();
+  assert.equal(attempts, 1);
+  assert.deepEqual(peer.iceCandidate, { candidate: "early" });
+  polledSignals = [];
+  await hangupCall();
+});

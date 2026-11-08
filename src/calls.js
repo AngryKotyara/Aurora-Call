@@ -38,6 +38,7 @@ let signalPollingStarted = false;
 let callPushListenerInstalled = false;
 let pushedCallInFlight = null;
 const pendingSignals = createPendingSignals();
+const pendingCandidates = new WeakMap();
 let verificationPeer = null;
 let verificationFingerprints = null;
 
@@ -180,6 +181,7 @@ function createPeer() {
     ...(relayOnlyEnabled() ? { iceTransportPolicy: "relay" } : {}),
   });
   state.peer = peer;
+  pendingCandidates.set(peer, []);
   state.remoteStream = new MediaStream();
   peer.ontrack = (event) => {
     const tracks =
@@ -379,17 +381,25 @@ function queueSignal(signal) {
 
 async function processSignal(signal) {
   try {
+    const peer = state.peer;
     if (signal.kind === "offer") {
-      await state.peer.setRemoteDescription(signal.payload);
+      await peer.setRemoteDescription(signal.payload);
+      await flushCandidates(peer);
       const answer = await state.peer.createAnswer();
       await state.peer.setLocalDescription(answer);
       await sendSignal("answer", answer);
       void updateCallVerificationCode(state.peer);
     } else if (signal.kind === "answer") {
-      await state.peer.setRemoteDescription(signal.payload);
+      await peer.setRemoteDescription(signal.payload);
+      await flushCandidates(peer);
       void updateCallVerificationCode(state.peer);
     } else if (signal.kind === "ice" || signal.kind === "candidate") {
-      await state.peer.addIceCandidate(signal.payload);
+      if (!peer.remoteDescription) {
+        const candidates = pendingCandidates.get(peer);
+        if (candidates && candidates.length < 100) candidates.push(signal.payload);
+      } else {
+        await peer.addIceCandidate(signal.payload);
+      }
       void updateCallVerificationCode(state.peer);
     } else if (signal.kind === "screen-share") {
       setRemoteScreenShareActive(Boolean(signal.payload?.active));
@@ -400,6 +410,19 @@ async function processSignal(signal) {
     }
   } catch (error) {
     console.error("signal handling failed", error);
+  }
+}
+
+async function flushCandidates(peer) {
+  const candidates = pendingCandidates.get(peer) || [];
+  pendingCandidates.set(peer, []);
+  for (const candidate of candidates) {
+    if (state.peer !== peer) break;
+    try {
+      await peer.addIceCandidate(candidate);
+    } catch (error) {
+      console.error("ICE candidate handling failed", error);
+    }
   }
 }
 
